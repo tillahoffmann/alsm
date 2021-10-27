@@ -8,6 +8,7 @@ setup(
     install_requires=[
         'matplotlib',
         'numpy',
+        'pystan>=3',
     ],
     extras_require={
         'tests': [

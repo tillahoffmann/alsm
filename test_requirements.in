@@ -1,1 +1,3 @@
 -e file:[tests,docs]
+# Temporary fix to install httpstan while a distribution for M1 is not available.
+git+https://github.com/tillahoffmann/httpstan.git@pip
