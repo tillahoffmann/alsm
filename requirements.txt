@@ -84,7 +84,7 @@ entrypoints==0.3
     #   nbconvert
 flake8==4.0.1
     # via -r test_requirements.txt
-httpstan @ git+https://github.com/tillahoffmann/httpstan.git@pip
+httpstan==4.6.1
     # via
     #   -r test_requirements.txt
     #   pystan

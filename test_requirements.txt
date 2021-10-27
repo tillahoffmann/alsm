@@ -36,7 +36,7 @@ docutils==0.17.1
     # via sphinx
 flake8==4.0.1
     # via alsm
-httpstan @ git+https://github.com/tillahoffmann/httpstan.git@pip
+httpstan==4.6.1
     # via
     #   -r test_requirements.in
     #   pystan

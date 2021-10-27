@@ -10,26 +10,16 @@ on:
 jobs:
   build:
     name: Continuous Integration
-    runs-on: "ubuntu-latest"
+    runs-on: "ubuntu-18.04"
     steps:
       - uses: "actions/checkout@v2"
       - uses: "actions/setup-python@v2"
         with:
-          python-version: "3.9"
+          python-version: "3.8"
       - uses: actions/cache@v2
         with:
           path: ${{ env.pythonLocation }}
           key: ${{ env.pythonLocation }}-${{ hashFiles('test_requirements.txt') }}
-      - if: github.repository == 'tillahoffmann/template'
-        name: "Maybe apply template"
-        run: |
-          python apply_template.py myproject -u myuser -r myrepo
-          ! grep --exclude-dir=.git --exclude=apply_template.py -r alsm .
-          ! grep --exclude-dir=.git --exclude=apply_template.py -r tillahoffmann .
-          ! grep --exclude-dir=.git --exclude=apply_template.py -r alsm .
-          ! find . -name alsm | grep .
-          ! find . -name tillahoffmann | grep .
-          ! find . -name alsm | grep .
       - name: "Install dependencies"
         run: "pip install -r test_requirements.txt"
       - name: "Build the project"
