@@ -1,4 +1,4 @@
-.PHONY : docs lint sync tests
+.PHONY : clean docs lint sync tests
 
 build : lint tests docs
 
@@ -19,3 +19,6 @@ requirements.txt : requirements.in setup.py test_requirements.txt
 
 test_requirements.txt : test_requirements.in setup.py
 	pip-compile -v -o $@ $<
+
+clean :
+	rm -rf docs/_build
