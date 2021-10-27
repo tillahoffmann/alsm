@@ -43,6 +43,10 @@ coverage[toml]==6.0.2
     # via
     #   -r test_requirements.txt
     #   pytest-cov
+cycler==0.10.0
+    # via
+    #   -r test_requirements.txt
+    #   matplotlib
 debugpy==1.5.0
     # via ipykernel
 decorator==5.1.0
@@ -124,10 +128,18 @@ jupyterlab-pygments==0.1.2
     # via nbconvert
 jupyterlab-widgets==1.0.2
     # via ipywidgets
+kiwisolver==1.3.2
+    # via
+    #   -r test_requirements.txt
+    #   matplotlib
 markupsafe==2.0.1
     # via
     #   -r test_requirements.txt
     #   jinja2
+matplotlib==3.4.3
+    # via
+    #   -r test_requirements.txt
+    #   alsm
 matplotlib-inline==0.1.3
     # via
     #   ipykernel
@@ -158,6 +170,11 @@ notebook==6.4.4
     # via
     #   jupyter
     #   widgetsnbextension
+numpy==1.21.3
+    # via
+    #   -r test_requirements.txt
+    #   alsm
+    #   matplotlib
 packaging==21.0
     # via
     #   -r test_requirements.txt
@@ -172,6 +189,10 @@ pexpect==4.8.0
     # via ipython
 pickleshare==0.7.5
     # via ipython
+pillow==8.4.0
+    # via
+    #   -r test_requirements.txt
+    #   matplotlib
 pluggy==1.0.0
     # via
     #   -r test_requirements.txt
@@ -212,6 +233,7 @@ pygments==2.10.0
 pyparsing==2.4.7
     # via
     #   -r test_requirements.txt
+    #   matplotlib
     #   packaging
 pyrsistent==0.18.0
     # via jsonschema
@@ -222,7 +244,10 @@ pytest==6.2.5
 pytest-cov==3.0.0
     # via -r test_requirements.txt
 python-dateutil==2.8.2
-    # via jupyter-client
+    # via
+    #   -r test_requirements.txt
+    #   jupyter-client
+    #   matplotlib
 pytz==2021.3
     # via
     #   -r test_requirements.txt
@@ -244,7 +269,9 @@ send2trash==1.8.0
     # via notebook
 six==1.16.0
     # via
+    #   -r test_requirements.txt
     #   bleach
+    #   cycler
     #   python-dateutil
 snowballstemmer==2.1.0
     # via
