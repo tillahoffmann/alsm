@@ -4,6 +4,7 @@ import stan
 
 __all__ = [
     'get_samples',
+    'get_chain',
 ]
 
 
@@ -227,3 +228,23 @@ def get_samples(fit: stan.fit.Fit, param: str, flatten_chains: bool = True, sque
     if squeeze:
         samples = np.squeeze(samples)
     return samples
+
+
+def get_chain(fit: stan.fit.Fit, chain, squeeze=True) -> dict:
+    """
+    Get a particular chain from a stan fit.
+
+    Args:
+        fit: Stan fit object to get samples from.
+        chain: Index of the chain to get or `best` to get the chain with the highest median `lp__`.
+        squeeze: Whether to remove dimensions of unit size.
+
+    Returns:
+        Dictionary mapping keys to samples of a particular chain.
+    """
+    if chain == 'best':
+        chain = np.median(get_samples(fit, 'lp__', False), axis=0).argmax()
+    return {
+        key: get_samples(fit, key, False, squeeze)[..., chain]
+        for key in fit.sample_and_sampler_param_names + fit.param_names
+    }
