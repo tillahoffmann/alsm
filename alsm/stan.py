@@ -94,6 +94,18 @@ FUNCTIONS = {
             return 1 / fmax(invphi, epsilon);
         }
     """,
+    # Evaluate a group scale given the fractional mean parameter.
+    'evaluate_group_scale': """
+        real evaluate_group_scale(real eta, int num_dims) {
+            return sqrt((eta ^ (- 2.0 / num_dims) - 1) / 2);
+        }
+    """,
+    # Evaluate the log Jacobian associated with the group scale transformation.
+    'evaluate_group_scale_log_jac': """
+        real evaluate_group_scale_log_jac(real eta, int num_dims) {
+            return - log(eta ^ (- 2.0 / num_dims) - 1) / 2 - (2.0 + num_dims) / num_dims * log(eta);
+        }
+    """
 }
 FUNCTIONS['__all__'] = '\n'.join(FUNCTIONS.values())
 
@@ -122,10 +134,15 @@ GROUP_MODEL = """
 
     // Estimate parameters of the negative binomial distribution.
     transformed parameters {
-        vector<lower=0>[num_groups] group_scales = sqrt((eta ^ (- 2.0 / num_dims) - 1) / 2);
+        vector<lower=0>[num_groups] group_scales;
         real mu[num_groups, num_groups];
         real variance[num_groups, num_groups];
         real phi[num_groups, num_groups];
+
+        // Obtain the group scales based on the "fraction of the maximum possible mean".
+        for (i in 1:num_groups) {
+            group_scales[i] = evaluate_group_scale(eta[i], num_dims);
+        }
 
         for (i in 1:num_groups) {
             for (j in 1:num_groups) {
@@ -167,6 +184,8 @@ GROUP_MODEL = """
 
         for (i in 1:num_groups) {
             group_locs[i] ~ normal(0, population_scale);
+            // Account for the change of variables.
+            target += evaluate_group_scale_log_jac(eta[i], num_dims);
             for (j in 1:num_groups) {
                 group_adjacency[i, j] ~ neg_binomial_2(mu[i, j], phi[i, j]);
             }

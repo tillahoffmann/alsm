@@ -32,6 +32,24 @@ KERNEL_INTER = alsm.evaluate_kernel(X[:, :, None, :], Y[:, None, :, :], PROPENSI
 ARD_INTER = np.random.poisson(KERNEL_INTER).sum(axis=(1, 2))
 
 
+def _bootstrap(xs: np.ndarray, x: float, func=np.mean):
+    """
+    Bootstrap the mean of `xs` and compare with the theoretical value `x`.
+    """
+    assert xs.ndim == 1, 'bootstrap tests only supported for scalar variables'
+    # Evaluate the bootstrap samples.
+    bootstrap = np.asarray([
+        func(xs[np.random.randint(NUM_SAMPLES, size=NUM_SAMPLES)], axis=0)
+        for _ in range(NUM_BOOTSTRAP)
+    ])
+
+    # Evaluate the pvalue and z-score.
+    pvalue = (x < bootstrap).mean()
+    pvalue = min(pvalue, 1 - pvalue)
+    z = (x - xs.mean()) / bootstrap.std()
+    assert pvalue > 1 / NUM_BOOTSTRAP, f'p-value: {pvalue}; z-score: {z}'
+
+
 @pytest.fixture
 def statistics():
     data = {
@@ -86,24 +104,6 @@ def statistics():
     return model.sample(num_chains=1, num_samples=1, num_warmup=0)
 
 
-def _bootstrap(xs, x, func=np.mean):
-    """
-    Bootstrap the mean of `xs` and compare with the theoretical value `x`.
-    """
-    assert xs.shape == (NUM_SAMPLES,)
-    # Evaluate the bootstrap samples.
-    bootstrap = np.asarray([
-        func(xs[np.random.randint(NUM_SAMPLES, size=NUM_SAMPLES)], axis=0)
-        for _ in range(NUM_BOOTSTRAP)
-    ])
-
-    # Evaluate the pvalue and z-score.
-    pvalue = (x < bootstrap).mean()
-    pvalue = min(pvalue, 1 - pvalue)
-    assert pvalue > 1 / NUM_BOOTSTRAP
-    z = (x - xs.mean()) / bootstrap.std()  # noqa
-
-
 def test_evaluate_mean(statistics):
     _bootstrap(KERNEL_XY, statistics['mean'])
 
@@ -155,3 +155,36 @@ def test_get_samples():
         assert x.shape == (10,) + trailing_shape
         y = alsm.get_samples(fit, 'y', flatten_chains, squeeze)
         assert y.shape == (trailing_shape if squeeze else (1,) + trailing_shape)
+
+
+def test_group_scale_change_of_variables():
+    data = {'num_dims': 2, 'alpha': 3, 'beta': 2}
+    posterior = stan.build("""
+    functions {
+        %(evaluate_group_scale)s
+        %(evaluate_group_scale_log_jac)s
+    }
+
+    data {
+        int<lower=1> num_dims;
+        real<lower=0> alpha, beta;
+    }
+
+    parameters {
+        real<lower=0, upper=1> eta;
+    }
+
+    transformed parameters {
+        real<lower=0> group_scale = evaluate_group_scale(eta, num_dims);
+    }
+
+    model {
+        group_scale ~ gamma(alpha, beta);
+        target += evaluate_group_scale_log_jac(eta, num_dims);
+    }
+    """ % alsm.stan.FUNCTIONS, data=data)
+    fit = posterior.sample()
+
+    xs = fit['group_scale'].squeeze()
+    _bootstrap(xs, data['alpha'] / data['beta'])
+    _bootstrap(xs, data['alpha'] / data['beta'] ** 2, func=np.var)
