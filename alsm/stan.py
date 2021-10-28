@@ -1,3 +1,12 @@
+import numpy as np
+import stan
+
+
+__all__ = [
+    'get_samples',
+]
+
+
 FUNCTIONS = {
     # Evaluate the expected connectivity kernel \lambda_{ij} for members i and j of two clusters.
     'evaluate_mean': """
@@ -87,3 +96,115 @@ FUNCTIONS = {
     """,
 }
 FUNCTIONS['__all__'] = '\n'.join(FUNCTIONS.values())
+
+
+GROUP_MODEL = """
+    functions {
+        %(functions)s
+    }
+
+    data {
+        int<lower=1> num_groups;
+        int<lower=1> num_dims;
+        int group_adjacency[num_groups, num_groups];
+        vector[num_groups] group_sizes;
+        real<lower=0> epsilon;
+    }
+
+    // Parameters of the model.
+    parameters {
+        real<lower=0> population_scale;
+        vector[num_dims] group_locs[num_groups];
+        real<lower=0, upper=1> propensity;
+        // This is the fraction of the potential mean within-group connections we can have.
+        vector<lower=0, upper=1>[num_groups] eta;
+    }
+
+    // Estimate parameters of the negative binomial distribution.
+    transformed parameters {
+        vector<lower=0>[num_groups] group_scales = sqrt((eta ^ (- 2.0 / num_dims) - 1) / 2);
+        real mu[num_groups, num_groups];
+        real variance[num_groups, num_groups];
+        real phi[num_groups, num_groups];
+
+        for (i in 1:num_groups) {
+            for (j in 1:num_groups) {
+                mu[i, j] = evaluate_mean(group_locs[i], group_locs[j], group_scales[i],
+                                         group_scales[j], propensity);
+                // Evaluate within-group connections.
+                if (i == j) {
+                    mu[i, j] = mu[i, j] * group_sizes[i] * (group_sizes[i] - 1);
+                    variance[i, j] = evaluate_aggregate_var(
+                        group_locs[i], group_locs[j], group_scales[i], group_scales[j], propensity,
+                        group_sizes[i], 0
+                    );
+                }
+                // Evaluate between-group connections.
+                else {
+                    mu[i, j] = mu[i, j] * group_sizes[i] * group_sizes[j];
+                    variance[i, j] = evaluate_aggregate_var(
+                        group_locs[i], group_locs[j], group_scales[i], group_scales[j], propensity,
+                        group_sizes[i], group_sizes[j]
+                    );
+                }
+
+                // Threshold the mean and variance such that we don't end up with numerical issues
+                // when the connection rate is small.
+                mu[i, j] = fmax(mu[i, j], epsilon);
+                variance[i, j] = fmax(variance[i, j], epsilon);
+
+                // Evaluate the overdispersion parameter for the negative binomial distribution.
+                phi[i, j] = evaluate_negbinom_2_phi(mu[i, j], variance[i, j], epsilon);
+            }
+        }
+    }
+
+    // The actual model.
+    model {
+        propensity ~ beta(1, 1);
+        group_scales ~ cauchy(0, 1);
+        population_scale ~ cauchy(0, 1);
+
+        for (i in 1:num_groups) {
+            group_locs[i] ~ normal(0, population_scale);
+            for (j in 1:num_groups) {
+                group_adjacency[i, j] ~ neg_binomial_2(mu[i, j], phi[i, j]);
+            }
+        }
+    }
+
+    // Generate posterior predictive replicates.
+    generated quantities {
+        int ppd_group_adjacency[num_groups, num_groups];
+        for (i in 1:num_groups) {
+            for (j in 1:num_groups) {
+                ppd_group_adjacency[i, j] = neg_binomial_2_rng(mu[i, j], phi[i, j]);
+            }
+        }
+    }
+""" % {'functions': FUNCTIONS['__all__']}
+
+
+def get_samples(fit: stan.fit.Fit, param: str, flatten_chains: bool = True, squeeze: bool = True) \
+        -> np.ndarray:
+    """
+    Get samples from a stan fit.
+
+    Args:
+        fit: Stan fit object to get samples from.
+        param: Name of the parameter.
+        flatten_chains: Whether to combine samples from all chains.
+        squeeze: Whether to remove dimensions of unit size.
+
+    Returns:
+        Posterior samples with shape `(*param_dims, num_samples * num_chains)` if `flatten_chains`
+        is truthy and shape `(*param_dims, num_samples, num_chains)` otherwise.
+    """
+    samples = fit[param]
+    if not flatten_chains:
+        *shape, _ = samples.shape
+        shape = shape + [-1, fit.num_chains]
+        samples = samples.reshape(shape)
+    if squeeze:
+        samples = np.squeeze(samples)
+    return samples
