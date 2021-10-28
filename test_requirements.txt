@@ -67,6 +67,7 @@ numpy==1.21.3
     #   alsm
     #   matplotlib
     #   pystan
+    #   scipy
 packaging==21.0
     # via
     #   pytest
@@ -107,6 +108,8 @@ pytz==2021.3
     # via babel
 requests==2.26.0
     # via sphinx
+scipy==1.7.1
+    # via alsm
 six==1.16.0
     # via
     #   cycler

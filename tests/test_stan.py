@@ -1,5 +1,6 @@
 import alsm
 import alsm.stan
+import itertools as it
 import numpy as np
 import pytest
 import stan
@@ -129,3 +130,28 @@ def test_evaluate_aggregate_var_intra(statistics):
 
 def test_evaluate_aggregate_var_inter(statistics):
     _bootstrap(ARD_INTER, statistics['aggregate_var_inter'], func=np.var)
+
+
+def test_group_model():
+    data = alsm.generate_data(np.asarray([10, 20]), 2)
+    data['epsilon'] = 1e-6
+    posterior = stan.build(alsm.stan.GROUP_MODEL, data=data)
+    fit = posterior.sample(num_chains=4, num_samples=3, num_warmup=17)
+    assert fit.num_chains == 4
+
+
+def test_get_samples():
+    posterior = stan.build(
+        'data { int n; } '
+        'parameters { vector[n] x; real y; } '
+        'model { x ~ normal(0, 1); y ~ normal(0, 1); }',
+        data={'n': 10},
+    )
+    fit = posterior.sample(num_chains=3, num_samples=17)
+
+    for flatten_chains, squeeze in it.product([True, False], [True, False]):
+        trailing_shape = (17 * 3,) if flatten_chains else (17, 3)
+        x = alsm.get_samples(fit, 'x', flatten_chains, squeeze)
+        assert x.shape == (10,) + trailing_shape
+        y = alsm.get_samples(fit, 'y', flatten_chains, squeeze)
+        assert y.shape == (trailing_shape if squeeze else (1,) + trailing_shape)

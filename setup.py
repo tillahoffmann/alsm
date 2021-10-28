@@ -9,6 +9,7 @@ setup(
         'matplotlib',
         'numpy',
         'pystan>=3',
+        'scipy',
     ],
     extras_require={
         'tests': [

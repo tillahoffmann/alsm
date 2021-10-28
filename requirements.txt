@@ -207,6 +207,7 @@ numpy==1.21.3
     #   alsm
     #   matplotlib
     #   pystan
+    #   scipy
 packaging==21.0
     # via
     #   -r test_requirements.txt
@@ -313,6 +314,10 @@ requests==2.26.0
     # via
     #   -r test_requirements.txt
     #   sphinx
+scipy==1.7.1
+    # via
+    #   -r test_requirements.txt
+    #   alsm
 send2trash==1.8.0
     # via notebook
 six==1.16.0
