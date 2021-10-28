@@ -8,6 +8,7 @@ setup(
     install_requires=[
         'matplotlib',
         'numpy',
+        'pandas',
         'pystan>=3',
         'scipy',
     ],

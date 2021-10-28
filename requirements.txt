@@ -206,6 +206,7 @@ numpy==1.21.3
     #   -r test_requirements.txt
     #   alsm
     #   matplotlib
+    #   pandas
     #   pystan
     #   scipy
 packaging==21.0
@@ -214,6 +215,10 @@ packaging==21.0
     #   bleach
     #   pytest
     #   sphinx
+pandas==1.3.4
+    # via
+    #   -r test_requirements.txt
+    #   alsm
 pandocfilters==1.5.0
     # via nbconvert
 parso==0.8.2
@@ -297,10 +302,12 @@ python-dateutil==2.8.2
     #   -r test_requirements.txt
     #   jupyter-client
     #   matplotlib
+    #   pandas
 pytz==2021.3
     # via
     #   -r test_requirements.txt
     #   babel
+    #   pandas
 pyzmq==22.3.0
     # via
     #   jupyter-client
