@@ -140,21 +140,33 @@ def test_group_model():
     assert fit.num_chains == 4
 
 
-def test_get_samples():
+@pytest.fixture
+def dummy_fit():
     posterior = stan.build(
         'data { int n; } '
         'parameters { vector[n] x; real y; } '
         'model { x ~ normal(0, 1); y ~ normal(0, 1); }',
         data={'n': 10},
     )
-    fit = posterior.sample(num_chains=3, num_samples=17)
+    return posterior.sample(num_chains=3, num_samples=17)
 
+
+def test_get_samples(dummy_fit):
     for flatten_chains, squeeze in it.product([True, False], [True, False]):
         trailing_shape = (17 * 3,) if flatten_chains else (17, 3)
-        x = alsm.get_samples(fit, 'x', flatten_chains, squeeze)
+        x = alsm.get_samples(dummy_fit, 'x', flatten_chains, squeeze)
         assert x.shape == (10,) + trailing_shape
-        y = alsm.get_samples(fit, 'y', flatten_chains, squeeze)
+        y = alsm.get_samples(dummy_fit, 'y', flatten_chains, squeeze)
         assert y.shape == (trailing_shape if squeeze else (1,) + trailing_shape)
+
+
+def test_get_chain(dummy_fit):
+    chain = alsm.get_chain(dummy_fit, 'best')
+    median_lp = np.median(alsm.get_samples(dummy_fit, 'lp__', False), axis=0)
+    assert median_lp.shape == (3,)
+    assert np.all(median_lp <= np.median(chain['lp__']))
+    assert chain['x'].shape == (10, 17)
+    assert chain['y'].shape == (17,)
 
 
 def test_group_scale_change_of_variables():
