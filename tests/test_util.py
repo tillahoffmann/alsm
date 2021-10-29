@@ -1,5 +1,6 @@
 import alsm
 import numpy as np
+from scipy import stats
 
 
 def test_generate_data():
@@ -30,7 +31,7 @@ def test_evaluate_grouping_matrix():
 
 
 def test_plot_edges():
-    data = alsm.generate_data(np.asarray([10, 20]), 2, population_scale=.1)
+    data = alsm.generate_data(np.asarray([10, 20]), 2, population_scale=.1, propensity=1)
     collection = alsm.plot_edges(data['locs'], data['adjacency'])
     assert collection.get_alpha().size == (data['adjacency'] > 0).sum()
 
@@ -52,3 +53,12 @@ def test_align_samples():
     aligned = alsm.align_samples(samples)
     for x in aligned:
         np.testing.assert_allclose(x, reference - reference.mean(axis=0))
+
+
+def test_negbinom_mean_var_to_params():
+    mean = np.random.gamma(1, 1)
+    var = mean + np.random.gamma(1, 1)
+
+    dist = stats.nbinom(*alsm.negative_binomial_np(mean, var))
+    np.testing.assert_allclose(mean, dist.mean())
+    np.testing.assert_allclose(var, dist.var())

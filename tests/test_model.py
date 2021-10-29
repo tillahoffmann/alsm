@@ -1,11 +1,11 @@
 import alsm
-import alsm.stan
 import itertools as it
 import matplotlib.axes
 import numpy as np
 import pytest
 from scipy import stats
 import stan
+import stan.fit
 
 
 # Generate samples that we're going to use to compare with theoretical summary statistics.
@@ -119,42 +119,89 @@ def statistics():
     model {
         dummy ~ normal(0, 1);
     }
-    """ % {'functions': alsm.stan.FUNCTIONS['__all__']}, data=data)
-    return model.sample(num_chains=1, num_samples=1, num_warmup=0)
+    """ % {'functions': alsm.model.FUNCTIONS['__all__']}, data=data)
+    fit = model.sample(num_chains=1, num_samples=1, num_warmup=0)
+    fit.data = data
+    return fit
 
 
-def test_evaluate_mean(statistics):
+def test_evaluate_mean(statistics: stan.fit.Fit):
     _bootstrap(KERNEL_XY, statistics['mean'])
+    mean = alsm.evaluate_mean(
+        statistics.data['loc1'], statistics.data['loc2'], statistics.data['scale1'],
+        statistics.data['scale2'], statistics.data['propensity'],
+    )
+    np.testing.assert_allclose(statistics['mean'], mean)
 
 
-def test_evaluate_square(statistics):
+def test_evaluate_square(statistics: stan.fit.Fit):
     _bootstrap(KERNEL_XY ** 2, statistics['square'])
+    square = alsm.evaluate_square(
+        statistics.data['loc1'], statistics.data['loc2'], statistics.data['scale1'],
+        statistics.data['scale2'], statistics.data['propensity'],
+    )
+    np.testing.assert_allclose(statistics['square'], square)
 
 
-def test_evaluate_cross(statistics):
+def test_evaluate_cross(statistics: stan.fit.Fit):
     _bootstrap(KERNEL_XY * KERNEL_XYp, statistics['cross'])
+    cross = alsm.evaluate_cross(
+        statistics.data['loc1'], statistics.data['loc2'], statistics.data['scale1'],
+        statistics.data['scale2'], statistics.data['propensity'],
+    )
+    np.testing.assert_allclose(statistics['cross'], cross)
 
 
-def test_evaluate_aggregate_mean_intra(statistics):
+def test_evaluate_aggregate_mean_intra(statistics: stan.fit.Fit):
     _bootstrap(ARD_INTRA, statistics['aggregate_mean_intra'])
+    aggregate_mean_intra = alsm.evaluate_aggregate_mean(
+        statistics.data['loc1'], statistics.data['loc1'], statistics.data['scale1'],
+        statistics.data['scale1'], statistics.data['propensity'], statistics.data['n1'], None,
+    )
+    np.testing.assert_allclose(statistics['aggregate_mean_intra'], aggregate_mean_intra)
 
 
-def test_evaluate_aggregate_mean_inter(statistics):
+def test_evaluate_aggregate_mean_inter(statistics: stan.fit.Fit):
     _bootstrap(ARD_INTER, statistics['aggregate_mean_inter'])
+    aggregate_mean_inter = alsm.evaluate_aggregate_mean(
+        statistics.data['loc1'], statistics.data['loc2'], statistics.data['scale1'],
+        statistics.data['scale2'], statistics.data['propensity'], statistics.data['n1'],
+        statistics.data['n2'],
+    )
+    np.testing.assert_allclose(statistics['aggregate_mean_inter'], aggregate_mean_inter)
 
 
-def test_evaluate_aggregate_var_intra(statistics):
+def test_evaluate_aggregate_var_intra(statistics: stan.fit.Fit):
     _bootstrap(ARD_INTRA, statistics['aggregate_var_intra'], func=np.var)
+    aggregate_var_intra = alsm.evaluate_aggregate_var(
+        statistics.data['loc1'], statistics.data['loc1'], statistics.data['scale1'],
+        statistics.data['scale1'], statistics.data['propensity'], statistics.data['n1'], None,
+    )
+    np.testing.assert_allclose(statistics['aggregate_var_intra'], aggregate_var_intra)
 
 
-def test_evaluate_aggregate_var_inter(statistics):
+def test_evaluate_aggregate_var_inter(statistics: stan.fit.Fit):
     _bootstrap(ARD_INTER, statistics['aggregate_var_inter'], func=np.var)
+    aggregate_var_inter = alsm.evaluate_aggregate_var(
+        statistics.data['loc1'], statistics.data['loc2'], statistics.data['scale1'],
+        statistics.data['scale2'], statistics.data['propensity'], statistics.data['n1'],
+        statistics.data['n2'],
+    )
+    np.testing.assert_allclose(statistics['aggregate_var_inter'], aggregate_var_inter)
 
 
-def test_group_model():
-    data = alsm.generate_data(np.asarray([10, 20]), 2)
+def test_group_model_from_data():
+    data = alsm.generate_data(np.asarray([10, 20, 30, 40]), 3)
     data['epsilon'] = 1e-6
-    posterior = stan.build(alsm.stan.GROUP_MODEL, data=data)
+    posterior = stan.build(alsm.model.GROUP_MODEL, data=data)
+    fit = posterior.sample(num_chains=4, num_samples=3, num_warmup=17)
+    assert fit.num_chains == 4
+
+
+def test_group_model_from_group_data():
+    data = alsm.generate_group_data(np.asarray([10, 20, 30, 40]), 3)
+    data['epsilon'] = 1e-6
+    posterior = stan.build(alsm.model.GROUP_MODEL, data=data)
     fit = posterior.sample(num_chains=4, num_samples=3, num_warmup=17)
     assert fit.num_chains == 4
 
@@ -213,7 +260,7 @@ def test_group_scale_change_of_variables(figure):
         group_scale ~ gamma(alpha, beta);
         target += evaluate_group_scale_log_jac(eta, num_dims);
     }
-    """ % alsm.stan.FUNCTIONS, data=data)
+    """ % alsm.model.FUNCTIONS, data=data)
     fit = posterior.sample(num_samples=1000)
 
     # Get the samples and thin them because the samples may still have autocorrelation (which will

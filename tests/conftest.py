@@ -4,6 +4,7 @@ import os
 import pytest
 
 
+np.seterr(all='raise', under='ignore')
 if seed := os.environ.get('SEED'):
     np.random.seed(int(seed))
 

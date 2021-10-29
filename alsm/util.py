@@ -3,97 +3,8 @@ import matplotlib.collections
 from matplotlib import pyplot as plt
 import numpy as np
 from scipy.linalg import orthogonal_procrustes
-
-
-def evaluate_kernel(x: np.ndarray, y: np.ndarray, propensity: np.ndarray) -> np.ndarray:
-    """
-    Evaluate the connectivity kernel.
-
-    Args:
-        x: Position of the first node with shape `(..., num_dims)`.
-        y: Position of the second node with shape `(..., num_dims)`.
-        propensity: Propensity for nodes to connect with shape `(...)`.
-
-    Returns:
-        Connectivity kernel with shape `(...)`.
-    """
-    delta2 = np.sum((x - y) ** 2, axis=-1)
-    return propensity ** 2 * np.exp(- delta2 / 2)
-
-
-def evaluate_grouping_matrix(group_idx: np.ndarray, num_groups: int = None) -> np.ndarray:
-    """
-    Evaluate a matrix with shape `(num_groups, num_nodes)` that can be used to aggregate adjacency
-    matrices.
-
-    Args:
-        group_idx: Group label for each node.
-        num_groups: Number of groups (inferred from `group_idx` if not given).
-
-    Returns:
-        A grouping matrix.
-    """
-    num_nodes, = group_idx.shape
-    num_groups = num_groups or group_idx.max() + 1
-    np.testing.assert_array_less(group_idx, num_groups)
-    grouping = np.zeros((num_groups, num_nodes))
-    grouping[group_idx, np.arange(num_nodes)] = 1
-    return grouping
-
-
-def generate_data(group_sizes: np.ndarray, num_dims: int, **params) -> dict:
-    """
-    Generate data from a latent space model with groups.
-
-    Args:
-        group_sizes: Number of nodes belonging to each group.
-        num_dims: Number of dimensions of the latent space.
-
-    Returns:
-        Synthetic dataset.
-    """
-    params['group_sizes'] = group_sizes
-    params['num_dims'] = num_dims
-    num_groups, = params['num_groups'], = group_sizes.shape
-    num_nodes = params['num_nodes'] = group_sizes.sum()
-
-    # Sample the scales and positions of nodes.
-    population_scale = params.setdefault(
-        'population_scale',
-        np.abs(np.random.standard_cauchy()),
-    )
-    group_locs = params.setdefault(
-        'group_locs',
-        np.random.normal(0, population_scale, (num_groups, num_dims)),
-    )
-    group_scales = params.setdefault(
-        'group_scales',
-        np.abs(np.random.standard_cauchy(num_groups)),
-    )
-    group_idx = params['group_idx'] = np.repeat(np.arange(num_groups), group_sizes)
-    assert group_idx.shape == (num_nodes,)
-    locs = params.setdefault(
-        'locs',
-        np.random.normal(group_locs[group_idx], group_scales[group_idx, None])
-    )
-
-    # Sample the propensity and evaluate the kernel, removing self-edges.
-    propensity = params.setdefault(
-        'propensity',
-        np.random.uniform(0, 1),
-    )
-    kernel = params['kernel'] = evaluate_kernel(locs[:, None, :], locs[None, :, :], propensity)
-    assert kernel.shape == (num_nodes, num_nodes)
-    np.fill_diagonal(kernel, 0)
-
-    # Sample the adjacency matrix and aggregate it.
-    adjacency = params.setdefault(
-        'adjacency',
-        np.random.poisson(kernel),
-    )
-    grouping = evaluate_grouping_matrix(group_idx, num_groups)
-    params['group_adjacency'] = (grouping @ adjacency @ grouping.T).astype(int)
-    return params
+import stan.fit
+import typing
 
 
 def plot_edges(locs: np.ndarray, adjacency: np.ndarray, *, alpha_min: float = 0,
@@ -135,7 +46,7 @@ def align_samples(samples: np.ndarray) -> np.ndarray:
         samples: Samples of locations with shape `(num_samples, num_units, num_dims)`.
 
     Returns:
-        Aligned samples.
+        aligned: Aligned samples.
     """
     transformed = []
     for sample in samples:
@@ -146,3 +57,87 @@ def align_samples(samples: np.ndarray) -> np.ndarray:
             sample = sample @ transform
         transformed.append(sample)
     return np.asarray(transformed)
+
+
+def evaluate_grouping_matrix(group_idx: np.ndarray, num_groups: int = None) -> np.ndarray:
+    """
+    Evaluate a matrix with shape `(num_groups, num_nodes)` that can be used to aggregate adjacency
+    matrices.
+
+    Args:
+        group_idx: Group label for each node.
+        num_groups: Number of groups (inferred from `group_idx` if not given).
+
+    Returns:
+        grouping: A grouping matrix.
+    """
+    num_nodes, = group_idx.shape
+    num_groups = num_groups or group_idx.max() + 1
+    np.testing.assert_array_less(group_idx, num_groups)
+    grouping = np.zeros((num_groups, num_nodes))
+    grouping[group_idx, np.arange(num_nodes)] = 1
+    return grouping
+
+
+def get_samples(fit: stan.fit.Fit, param: str, flatten_chains: bool = True, squeeze: bool = True) \
+        -> np.ndarray:
+    """
+    Get samples from a stan fit.
+
+    Args:
+        fit: Stan fit object to get samples from.
+        param: Name of the parameter.
+        flatten_chains: Whether to combine samples from all chains.
+        squeeze: Whether to remove dimensions of unit size.
+
+    Returns:
+        samples: Posterior samples with shape `(*param_dims, num_samples * num_chains)` if
+            `flatten_chains` is truthy and shape `(*param_dims, num_samples, num_chains)` otherwise.
+    """
+    samples = fit[param]
+    if not flatten_chains:
+        *shape, _ = samples.shape
+        shape = shape + [-1, fit.num_chains]
+        samples = samples.reshape(shape)
+    if squeeze:
+        samples = np.squeeze(samples)
+    return samples
+
+
+def get_chain(fit: stan.fit.Fit, chain, squeeze=True) -> dict:
+    """
+    Get a particular chain from a stan fit.
+
+    Args:
+        fit: Stan fit object to get samples from.
+        chain: Index of the chain to get or `best` to get the chain with the highest median `lp__`.
+        squeeze: Whether to remove dimensions of unit size.
+
+    Returns:
+        chain: Dictionary mapping keys to samples of a particular chain.
+    """
+    if chain == 'best':
+        chain = np.median(get_samples(fit, 'lp__', False), axis=0).argmax()
+    return {
+        key: get_samples(fit, key, False, squeeze)[..., chain]
+        for key in fit.sample_and_sampler_param_names + fit.param_names
+    }
+
+
+def negative_binomial_np(mean: np.ndarray, var: np.ndarray, epsilon: float = 1e-9) \
+        -> typing.Tuple[np.ndarray, np.ndarray]:
+    """
+    Convert mean and variance to the parameters of a negative binomial distribution.
+
+    Args:
+        mean: Mean of the distribution.
+        var: Variance of the distribution.
+
+    Returns:
+        n: Number of failures for the negative binomial distribution.
+        p: Success probability of each trial.
+    """
+    excess_var = np.maximum(var - mean, epsilon)
+    n = mean ** 2 / excess_var
+    p = mean / var
+    return n, p
