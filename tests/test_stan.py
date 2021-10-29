@@ -1,8 +1,10 @@
 import alsm
 import alsm.stan
 import itertools as it
+import matplotlib.axes
 import numpy as np
 import pytest
+from scipy import stats
 import stan
 
 
@@ -32,22 +34,39 @@ KERNEL_INTER = alsm.evaluate_kernel(X[:, :, None, :], Y[:, None, :, :], PROPENSI
 ARD_INTER = np.random.poisson(KERNEL_INTER).sum(axis=(1, 2))
 
 
-def _bootstrap(xs: np.ndarray, x: float, func=np.mean):
+def _bootstrap(xs: np.ndarray, x: float, func=np.mean, ax: matplotlib.axes.Axes = None):
     """
     Bootstrap the mean of `xs` and compare with the theoretical value `x`.
     """
     assert xs.ndim == 1, 'bootstrap tests only supported for scalar variables'
+    num_samples, = xs.shape
     # Evaluate the bootstrap samples.
     bootstrap = np.asarray([
-        func(xs[np.random.randint(NUM_SAMPLES, size=NUM_SAMPLES)], axis=0)
+        func(xs[np.random.randint(num_samples, size=num_samples)], axis=0)
         for _ in range(NUM_BOOTSTRAP)
     ])
 
     # Evaluate the pvalue and z-score.
     pvalue = (x < bootstrap).mean()
     pvalue = min(pvalue, 1 - pvalue)
-    z = (x - xs.mean()) / bootstrap.std()
+    z = (x - func(xs)) / bootstrap.std()
+
+    if ax:
+        ax.hist(bootstrap, density=True, bins=20)
+        ax.axvline(x, color='k', ls=':')
+        lines = [
+            f'p-value: {pvalue:.5f}',
+            f'z-score: {z:.5f}',
+        ]
+        bbox = {
+            'facecolor': 'w',
+            'alpha': 0.5,
+        }
+        ax.text(0.05, 0.95, '\n'.join(lines), va='top', transform=ax.transAxes, bbox=bbox)
+
+    # Ensure at least one sample lies on either side of the theoretical value.
     assert pvalue > 1 / NUM_BOOTSTRAP, f'p-value: {pvalue}; z-score: {z}'
+    assert np.abs(z) < 10, f'p-value: {pvalue}; z-score: {z}'
 
 
 @pytest.fixture
@@ -169,8 +188,8 @@ def test_get_chain(dummy_fit):
     assert chain['y'].shape == (17,)
 
 
-def test_group_scale_change_of_variables():
-    data = {'num_dims': 2, 'alpha': 3, 'beta': 2}
+def test_group_scale_change_of_variables(figure):
+    data = {'num_dims': 2, 'alpha': 5, 'beta': 2}
     posterior = stan.build("""
     functions {
         %(evaluate_group_scale)s
@@ -195,8 +214,26 @@ def test_group_scale_change_of_variables():
         target += evaluate_group_scale_log_jac(eta, num_dims);
     }
     """ % alsm.stan.FUNCTIONS, data=data)
-    fit = posterior.sample()
+    fit = posterior.sample(num_samples=1000)
 
-    xs = fit['group_scale'].squeeze()
-    _bootstrap(xs, data['alpha'] / data['beta'])
-    _bootstrap(xs, data['alpha'] / data['beta'] ** 2, func=np.var)
+    # Get the samples and thin them because the samples may still have autocorrelation (which will
+    # mess with the bootstrap estimate).
+    xs = alsm.get_samples(fit, 'group_scale', flatten_chains=False)
+    assert xs.shape == (1000, 4)
+    xs = xs[::10].ravel()
+
+    gs = figure.add_gridspec(2, 2)
+
+    ax = figure.add_subplot(gs[:, 0])
+    ax.hist(xs, bins=20, density=True)
+    lin = np.linspace(0, xs.max(), 100)
+    ax.plot(lin, stats.gamma(data['alpha'], scale=1 / data['beta']).pdf(lin), color='C1')
+    ax.set_xlabel(r'$\eta\sim\mathrm{Gamma}(%(alpha).1f, %(beta).1f)$' % data)
+
+    ax = figure.add_subplot(gs[0, 1])
+    ax.set_xlabel('bootstrapped mean')
+    _bootstrap(xs, data['alpha'] / data['beta'], ax=ax)
+
+    ax = figure.add_subplot(gs[1, 1])
+    ax.set_xlabel('bootstrapped var')
+    _bootstrap(xs, data['alpha'] / data['beta'] ** 2, func=np.var, ax=ax)
