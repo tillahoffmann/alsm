@@ -13,3 +13,4 @@ intersphinx_mapping = {
     'pystan': ('https://pystan.readthedocs.io/en/latest/', None),
 }
 napoleon_custom_sections = [('Returns', 'params_style')]
+html_theme = 'nature'

@@ -119,7 +119,7 @@ def statistics():
     model {
         dummy ~ normal(0, 1);
     }
-    """ % {'functions': alsm_model.FUNCTIONS['__all__']}, data=data)
+    """ % {'functions': '\n'.join(alsm_model.STAN_SNIPPETS.values())}, data=data)
     fit = model.sample(num_chains=1, num_samples=1, num_warmup=0)
     fit.data = data
     return fit
@@ -193,7 +193,7 @@ def test_evaluate_aggregate_var_inter(statistics: stan.fit.Fit):
 def test_group_model_from_data():
     data = alsm_model.generate_data(np.asarray([10, 20, 30, 40]), 3)
     data['epsilon'] = 1e-6
-    posterior = stan.build(alsm_model.GROUP_MODEL, data=data)
+    posterior = stan.build(alsm_model.get_group_model_code(), data=data)
     fit = posterior.sample(num_chains=4, num_samples=3, num_warmup=17)
     assert fit.num_chains == 4
 
@@ -201,7 +201,7 @@ def test_group_model_from_data():
 def test_group_model_from_group_data():
     data = alsm_model.generate_group_data(np.asarray([10, 20, 30, 40]), 3)
     data['epsilon'] = 1e-6
-    posterior = stan.build(alsm_model.GROUP_MODEL, data=data)
+    posterior = stan.build(alsm_model.get_group_model_code(), data=data)
     fit = posterior.sample(num_chains=4, num_samples=3, num_warmup=17)
     assert fit.num_chains == 4
 
@@ -231,7 +231,7 @@ def test_group_scale_change_of_variables(figure):
         group_scale ~ gamma(alpha, beta);
         target += evaluate_group_scale_log_jac(eta, num_dims);
     }
-    """ % alsm_model.FUNCTIONS, data=data)
+    """ % alsm_model.STAN_SNIPPETS, data=data)
     fit = posterior.sample(num_samples=1000)
 
     # Get the samples and thin them because the samples may still have autocorrelation (which will

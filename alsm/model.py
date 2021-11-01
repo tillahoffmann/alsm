@@ -1,40 +1,151 @@
 import numpy as np
+import re
+import typing
 from .util import evaluate_grouping_matrix, negative_binomial_np
 
 
-FUNCTIONS = {
-    # Evaluate the expected connectivity kernel \lambda_{ij} for members i and j of two clusters.
-    'evaluate_mean': """
+STAN_SNIPPETS = {
+    # Evaluate the concentration parameter phi of the alternative parametrisation of the negative
+    # binomial distribution.
+    'evaluate_negbinom_2_phi': """
+        real evaluate_negbinom_2_phi(real mean, real var_, real epsilon) {
+            real invphi = (var_ - mean) / mean ^ 2;
+            // If the inverse of the phi parameter in the negbinom_2 parametrisation is negative,
+            // the model is underdispersed with respect to a Poisson distribution. This will never
+            // be the case in our model, but we may very well end up with negative values due to
+            // numerical issues. We'll just return a large, fixed phi.
+            return 1 / fmax(invphi, epsilon);
+        }
+    """,
+    # Evaluate a group scale given the fractional mean parameter.
+    'evaluate_group_scale': """
+        real evaluate_group_scale(real eta, int num_dims) {
+            return sqrt((eta ^ (- 2.0 / num_dims) - 1) / 2);
+        }
+    """,
+    # Evaluate the log Jacobian associated with the group scale transformation.
+    'evaluate_group_scale_log_jac': """
+        real evaluate_group_scale_log_jac(real eta, int num_dims) {
+            return - log(eta ^ (- 2.0 / num_dims) - 1) / 2 - (2.0 + num_dims) / num_dims * log(eta);
+        }
+    """
+}
+
+
+def stan_snippet(func: typing.Callable) -> typing.Callable:
+    """
+    Decorator to extract Stan code from an RST code block in the docstring and add it to the snippet
+    library.
+    """
+    name = func.__name__
+    if name in STAN_SNIPPETS:
+        raise ValueError(f'{name} is already a snippet')  # pragma: no cover
+
+    # Get the code from the docstring and ensure there's exactly one code block (cf
+    # https://stackoverflow.com/a/53085201/1150961).
+    pattern = r"\.\. code-block:: stan\s+$((\n +.*|\s)+)"
+    matches = re.findall(pattern, func.__doc__, re.M)
+    if (n := len(matches)) != 1:
+        raise ValueError(f'need exactly one match for {name}, not {n}')  # pragma: no cover
+
+    # Add the code to the snippets and return the original function unmodified.
+    code, _ = matches[0]
+    STAN_SNIPPETS[name] = code
+    return func
+
+
+def evaluate_kernel(x: np.ndarray, y: np.ndarray, propensity: np.ndarray) -> np.ndarray:
+    r"""
+    Evaluate the connectivity kernel :math:`\alpha \exp\left(-\frac{(x-y)^2}{2}\right)`.
+
+    Args:
+        x: Position of the first node with shape `(..., num_dims)`.
+        y: Position of the second node with shape `(..., num_dims)`.
+        propensity: Propensity for nodes to connect with shape `(...)`.
+
+    Returns:
+        kernel: Connectivity kernel with shape `(...)`.
+    """
+    delta2 = np.sum((x - y) ** 2, axis=-1)
+    return propensity * np.exp(- delta2 / 2)
+
+
+@stan_snippet
+def evaluate_mean(x: np.ndarray, y: np.ndarray, xscale: np.ndarray, yscale: np.ndarray,
+                  propensity: np.ndarray) -> np.ndarray:
+
+    r"""
+    Evaluate the expected connectivity kernel :math:`\lambda_{ij}: for the members :math:`i` and
+    :math:`j` of two clusters.
+
+    .. code-block:: stan
+
         real evaluate_mean(vector loc1, vector loc2, real scale1, real scale2, real propensity) {
             real d2 = squared_distance(loc1, loc2);
             real var_ = 1 + scale1 ^ 2 + scale2 ^ 2;
             int ndims = num_elements(loc1);
             return propensity * exp(- d2 / (2 * var_)) / var_ ^ (ndims / 2.0);
         }
-    """,
-    # Evaluate the expected squared connectivity kernel \lambda_{ij}^2 for members i and j of two
-    # clusters.
-    'evaluate_square': """
+    """
+    d2 = np.square(x - y).sum(axis=-1)
+    var = 1 + xscale ** 2 + yscale ** 2
+    p = x.shape[-1]
+    return propensity * np.exp(- d2 / (2 * var)) / var ** (p / 2)
+
+
+@stan_snippet
+def evaluate_square(x: np.ndarray, y: np.ndarray, xscale: np.ndarray, yscale: np.ndarray,
+                    propensity: np.ndarray) -> np.ndarray:
+    r"""
+    Evaluate the expected squared connectivity kernel :math:`\lambda_{ij}^2: for the members
+    :math:`i` and :math:`j` of two clusters.
+
+    .. code-block:: stan
+
         real evaluate_square(vector loc1, vector loc2, real scale1, real scale2, real propensity) {
             real d2 = squared_distance(loc1, loc2);
             real var_ = 1 + 2 * (scale1 ^ 2 + scale2 ^ 2);
             int ndims = num_elements(loc1);
             return propensity ^ 2 * exp(- d2 / var_) / var_ ^ (ndims / 2.0);
         }
-    """,
-    # Evaluate the expected cross term \lambda_{ij}\lambda_{il} fors members i, j, and l, where i
-    # belongs to the first cluster and j and l belong to the second cluster.
-    'evaluate_cross': """
+    """
+    d2 = np.square(x - y).sum(axis=-1)
+    var = 1 + 2 * (xscale ** 2 + yscale ** 2)
+    p = x.shape[-1]
+    return propensity ** 2 * np.exp(- d2 / var) / var ** (p / 2)
+
+
+@stan_snippet
+def evaluate_cross(x: np.ndarray, y: np.ndarray, xscale: np.ndarray, yscale: np.ndarray,
+                   propensity: np.ndarray) -> np.ndarray:
+    r"""
+    Evaluate the expected cross term :math:`\lambda_{ij}\lambda_{il}` fors members :math:`i`,
+    :math:`j`, and :math:`l`, where :math:`i` belongs to the first cluster and :math:`j` and
+    :math:`l` belong to the second cluster.
+
+    .. code-block:: stan
+
         real evaluate_cross(vector loc1, vector loc2, real scale1, real scale2, real propensity) {
             real d2 = squared_distance(loc1, loc2);
             real var_ = 1 + 2 * scale1 ^ 2 + scale2 ^ 2;
             int ndims = num_elements(loc1);
             return propensity ^ 2 * exp(- d2 / var_) / (var_ * (1 + scale2 ^ 2)) ^ (ndims / 2.0);
         }
-    """,
-    # Evaluate the expected connection vlumes between two clusters. If n2 == 0, we consider the self
-    # connection rate.
-    'evaluate_aggregate_mean': """
+    """
+    d2 = np.square(x - y).sum(axis=-1)
+    var = 1 + 2 * xscale ** 2 + yscale ** 2
+    p = x.shape[-1]
+    return propensity ** 2 * np.exp(- d2 / var) / (var * (1 + yscale ** 2)) ** (p / 2)
+
+
+@stan_snippet
+def evaluate_aggregate_mean(x, y, xscale, yscale, propensity, nx, ny):
+    """
+    Evaluate the expected connection volume :math:`Y_{ab}` between two clusters :math:`a` and
+    :math:`b`.
+
+    .. code-block:: stan
+
         real evaluate_aggregate_mean(vector loc1, vector loc2, real scale1, real scale2,
                                      real propensity, real n1, real n2) {
             real mean_ = evaluate_mean(loc1, loc2, scale1, scale2, propensity);
@@ -44,10 +155,22 @@ FUNCTIONS = {
                 return n1 * (n1 - 1) * mean_;
             }
         }
-    """,
-    # Evaluate the variance of aggregate connection volumes between two clusters. If n2 == 0, we
-    # consider the self connection rate.
-    'evaluate_aggregate_var': """
+    """
+    mean = evaluate_mean(x, y, xscale, yscale, propensity)
+    if ny is None:
+        return mean * nx * (nx - 1)
+    else:
+        return mean * nx * ny
+
+
+@stan_snippet
+def evaluate_aggregate_var(x, y, xscale, yscale, propensity, nx, ny):
+    """
+    Evaluate the variance of the connection volume :math:`Y_{ab}` between two clusters :math:`a` and
+    :math:`b`.
+
+    .. code-block:: stan
+
         real evaluate_aggregate_var(vector loc1, vector loc2, real scale1, real scale2,
                                     real propensity, real n1, real n2) {
             real y_ij = evaluate_mean(loc1, loc2, scale1, scale2, propensity);
@@ -76,38 +199,34 @@ FUNCTIONS = {
                 );
             }
         }
-    """,
-    # Evaluate the concentration parameter phi of the alternative parametrisation of the negative
-    # binomial distribution.
-    'evaluate_negbinom_2_phi': """
-        real evaluate_negbinom_2_phi(real mean, real var_, real epsilon) {
-            real invphi = (var_ - mean) / mean ^ 2;
-            // If the inverse of the phi parameter in the negbinom_2 parametrisation is negative,
-            // the model is underdispersed with respect to a Poisson distribution. This will never
-            // be the case in our model, but we may very well end up with negative values due to
-            // numerical issues. We'll just return a large, fixed phi.
-            return 1 / fmax(invphi, epsilon);
-        }
-    """,
-    # Evaluate a group scale given the fractional mean parameter.
-    'evaluate_group_scale': """
-        real evaluate_group_scale(real eta, int num_dims) {
-            return sqrt((eta ^ (- 2.0 / num_dims) - 1) / 2);
-        }
-    """,
-    # Evaluate the log Jacobian associated with the group scale transformation.
-    'evaluate_group_scale_log_jac': """
-        real evaluate_group_scale_log_jac(real eta, int num_dims) {
-            return - log(eta ^ (- 2.0 / num_dims) - 1) / 2 - (2.0 + num_dims) / num_dims * log(eta);
-        }
     """
-}
-FUNCTIONS['__all__'] = '\n'.join(FUNCTIONS.values())
+    y_ij = evaluate_mean(x, y, xscale, yscale, propensity)
+    y_ijkl = y_ij ** 2
+    y_ijji = evaluate_square(x, y, xscale, yscale, propensity)
+    y_ijij = y_ij + y_ijji
+    y_ijil = evaluate_cross(x, y, xscale, yscale, propensity)
+    y_ijkj = evaluate_cross(y, x, yscale, xscale, propensity)
+
+    if ny is None:
+        return nx * (nx - 1) * (
+            y_ijij
+            + y_ijji
+            + 4 * (nx - 2) * y_ijil
+            - 2 * (2 * nx - 3) * y_ijkl
+        )
+    else:
+        return nx * ny * (
+            y_ijij
+            + (ny - 1) * y_ijil
+            + (nx - 1) * y_ijkj
+            - (nx + ny - 1) * y_ijkl
+        )
 
 
-GROUP_MODEL = """
+def get_group_model_code():
+    return """
     functions {
-        %(functions)s
+        %(all_snippets)s
     }
 
     data {
@@ -196,79 +315,7 @@ GROUP_MODEL = """
             }
         }
     }
-""" % {'functions': FUNCTIONS['__all__']}
-
-
-def evaluate_kernel(x: np.ndarray, y: np.ndarray, propensity: np.ndarray) -> np.ndarray:
-    """
-    Evaluate the connectivity kernel.
-
-    Args:
-        x: Position of the first node with shape `(..., num_dims)`.
-        y: Position of the second node with shape `(..., num_dims)`.
-        propensity: Propensity for nodes to connect with shape `(...)`.
-
-    Returns:
-        kernel: Connectivity kernel with shape `(...)`.
-    """
-    delta2 = np.sum((x - y) ** 2, axis=-1)
-    return propensity * np.exp(- delta2 / 2)
-
-
-def evaluate_mean(x: np.ndarray, y: np.ndarray, xscale: np.ndarray, yscale: np.ndarray,
-                  propensity: np.ndarray) -> np.ndarray:
-    d2 = np.square(x - y).sum(axis=-1)
-    var = 1 + xscale ** 2 + yscale ** 2
-    p = x.shape[-1]
-    return propensity * np.exp(- d2 / (2 * var)) / var ** (p / 2)
-
-
-def evaluate_square(x: np.ndarray, y: np.ndarray, xscale: np.ndarray, yscale: np.ndarray,
-                    propensity: np.ndarray) -> np.ndarray:
-    d2 = np.square(x - y).sum(axis=-1)
-    var = 1 + 2 * (xscale ** 2 + yscale ** 2)
-    p = x.shape[-1]
-    return propensity ** 2 * np.exp(- d2 / var) / var ** (p / 2)
-
-
-def evaluate_cross(x: np.ndarray, y: np.ndarray, xscale: np.ndarray, yscale: np.ndarray,
-                   propensity: np.ndarray) -> np.ndarray:
-    d2 = np.square(x - y).sum(axis=-1)
-    var = 1 + 2 * xscale ** 2 + yscale ** 2
-    p = x.shape[-1]
-    return propensity ** 2 * np.exp(- d2 / var) / (var * (1 + yscale ** 2)) ** (p / 2)
-
-
-def evaluate_aggregate_mean(x, y, xscale, yscale, propensity, nx, ny):
-    mean = evaluate_mean(x, y, xscale, yscale, propensity)
-    if ny is None:
-        return mean * nx * (nx - 1)
-    else:
-        return mean * nx * ny
-
-
-def evaluate_aggregate_var(x, y, xscale, yscale, propensity, nx, ny):
-    y_ij = evaluate_mean(x, y, xscale, yscale, propensity)
-    y_ijkl = y_ij ** 2
-    y_ijji = evaluate_square(x, y, xscale, yscale, propensity)
-    y_ijij = y_ij + y_ijji
-    y_ijil = evaluate_cross(x, y, xscale, yscale, propensity)
-    y_ijkj = evaluate_cross(y, x, yscale, xscale, propensity)
-
-    if ny is None:
-        return nx * (nx - 1) * (
-            y_ijij
-            + y_ijji
-            + 4 * (nx - 2) * y_ijil
-            - 2 * (2 * nx - 3) * y_ijkl
-        )
-    else:
-        return nx * ny * (
-            y_ijij
-            + (ny - 1) * y_ijil
-            + (nx - 1) * y_ijkj
-            - (nx + ny - 1) * y_ijkl
-        )
+""" % {'all_snippets': '\n'.join(STAN_SNIPPETS.values())}
 
 
 def _generate_common_data(group_sizes: np.ndarray, num_dims: int, **params) -> dict:
