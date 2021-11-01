@@ -133,3 +133,5 @@ dmypy.json
 .vscode
 playground/
 workspace/
+test_images/
+data/

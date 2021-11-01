@@ -1,10 +1,10 @@
 :code:`alsm` package
 --------------------
 
-alsm.stan
-^^^^^^^^^
+alsm.model
+^^^^^^^^^^
 
-.. automodule:: alsm.stan
+.. automodule:: alsm.model
   :members:
 
 

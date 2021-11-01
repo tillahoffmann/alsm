@@ -1,11 +1,5 @@
 import numpy as np
-import stan
-
-
-__all__ = [
-    'get_samples',
-    'get_chain',
-]
+from .util import evaluate_grouping_matrix, negative_binomial_np
 
 
 FUNCTIONS = {
@@ -15,7 +9,7 @@ FUNCTIONS = {
             real d2 = squared_distance(loc1, loc2);
             real var_ = 1 + scale1 ^ 2 + scale2 ^ 2;
             int ndims = num_elements(loc1);
-            return propensity ^ 2 * exp(- d2 / (2 * var_)) / var_ ^ (ndims / 2.0);
+            return propensity * exp(- d2 / (2 * var_)) / var_ ^ (ndims / 2.0);
         }
     """,
     # Evaluate the expected squared connectivity kernel \lambda_{ij}^2 for members i and j of two
@@ -25,7 +19,7 @@ FUNCTIONS = {
             real d2 = squared_distance(loc1, loc2);
             real var_ = 1 + 2 * (scale1 ^ 2 + scale2 ^ 2);
             int ndims = num_elements(loc1);
-            return propensity ^ 4 * exp(- d2 / var_) / var_ ^ (ndims / 2.0);
+            return propensity ^ 2 * exp(- d2 / var_) / var_ ^ (ndims / 2.0);
         }
     """,
     # Evaluate the expected cross term \lambda_{ij}\lambda_{il} fors members i, j, and l, where i
@@ -35,7 +29,7 @@ FUNCTIONS = {
             real d2 = squared_distance(loc1, loc2);
             real var_ = 1 + 2 * scale1 ^ 2 + scale2 ^ 2;
             int ndims = num_elements(loc1);
-            return propensity ^ 4 * exp(- d2 / var_) / (var_ * (1 + scale2 ^ 2)) ^ (ndims / 2.0);
+            return propensity ^ 2 * exp(- d2 / var_) / (var_ * (1 + scale2 ^ 2)) ^ (ndims / 2.0);
         }
     """,
     # Evaluate the expected connection vlumes between two clusters. If n2 == 0, we consider the self
@@ -205,46 +199,165 @@ GROUP_MODEL = """
 """ % {'functions': FUNCTIONS['__all__']}
 
 
-def get_samples(fit: stan.fit.Fit, param: str, flatten_chains: bool = True, squeeze: bool = True) \
-        -> np.ndarray:
+def evaluate_kernel(x: np.ndarray, y: np.ndarray, propensity: np.ndarray) -> np.ndarray:
     """
-    Get samples from a stan fit.
+    Evaluate the connectivity kernel.
 
     Args:
-        fit: Stan fit object to get samples from.
-        param: Name of the parameter.
-        flatten_chains: Whether to combine samples from all chains.
-        squeeze: Whether to remove dimensions of unit size.
+        x: Position of the first node with shape `(..., num_dims)`.
+        y: Position of the second node with shape `(..., num_dims)`.
+        propensity: Propensity for nodes to connect with shape `(...)`.
 
     Returns:
-        Posterior samples with shape `(*param_dims, num_samples * num_chains)` if `flatten_chains`
-        is truthy and shape `(*param_dims, num_samples, num_chains)` otherwise.
+        kernel: Connectivity kernel with shape `(...)`.
     """
-    samples = fit[param]
-    if not flatten_chains:
-        *shape, _ = samples.shape
-        shape = shape + [-1, fit.num_chains]
-        samples = samples.reshape(shape)
-    if squeeze:
-        samples = np.squeeze(samples)
-    return samples
+    delta2 = np.sum((x - y) ** 2, axis=-1)
+    return propensity * np.exp(- delta2 / 2)
 
 
-def get_chain(fit: stan.fit.Fit, chain, squeeze=True) -> dict:
+def evaluate_mean(x: np.ndarray, y: np.ndarray, xscale: np.ndarray, yscale: np.ndarray,
+                  propensity: np.ndarray) -> np.ndarray:
+    d2 = np.square(x - y).sum(axis=-1)
+    var = 1 + xscale ** 2 + yscale ** 2
+    p = x.shape[-1]
+    return propensity * np.exp(- d2 / (2 * var)) / var ** (p / 2)
+
+
+def evaluate_square(x: np.ndarray, y: np.ndarray, xscale: np.ndarray, yscale: np.ndarray,
+                    propensity: np.ndarray) -> np.ndarray:
+    d2 = np.square(x - y).sum(axis=-1)
+    var = 1 + 2 * (xscale ** 2 + yscale ** 2)
+    p = x.shape[-1]
+    return propensity ** 2 * np.exp(- d2 / var) / var ** (p / 2)
+
+
+def evaluate_cross(x: np.ndarray, y: np.ndarray, xscale: np.ndarray, yscale: np.ndarray,
+                   propensity: np.ndarray) -> np.ndarray:
+    d2 = np.square(x - y).sum(axis=-1)
+    var = 1 + 2 * xscale ** 2 + yscale ** 2
+    p = x.shape[-1]
+    return propensity ** 2 * np.exp(- d2 / var) / (var * (1 + yscale ** 2)) ** (p / 2)
+
+
+def evaluate_aggregate_mean(x, y, xscale, yscale, propensity, nx, ny):
+    mean = evaluate_mean(x, y, xscale, yscale, propensity)
+    if ny is None:
+        return mean * nx * (nx - 1)
+    else:
+        return mean * nx * ny
+
+
+def evaluate_aggregate_var(x, y, xscale, yscale, propensity, nx, ny):
+    y_ij = evaluate_mean(x, y, xscale, yscale, propensity)
+    y_ijkl = y_ij ** 2
+    y_ijji = evaluate_square(x, y, xscale, yscale, propensity)
+    y_ijij = y_ij + y_ijji
+    y_ijil = evaluate_cross(x, y, xscale, yscale, propensity)
+    y_ijkj = evaluate_cross(y, x, yscale, xscale, propensity)
+
+    if ny is None:
+        return nx * (nx - 1) * (
+            y_ijij
+            + y_ijji
+            + 4 * (nx - 2) * y_ijil
+            - 2 * (2 * nx - 3) * y_ijkl
+        )
+    else:
+        return nx * ny * (
+            y_ijij
+            + (ny - 1) * y_ijil
+            + (nx - 1) * y_ijkj
+            - (nx + ny - 1) * y_ijkl
+        )
+
+
+def _generate_common_data(group_sizes: np.ndarray, num_dims: int, **params) -> dict:
+    params['group_sizes'] = group_sizes
+    params['num_dims'] = num_dims
+    num_groups, = params['num_groups'], = group_sizes.shape
+    params['num_nodes'] = group_sizes.sum()
+
+    # Sample the overall propensity to form edges.
+    params.setdefault(
+        'propensity',
+        np.random.uniform(0, 1),
+    )
+
+    # Sample the scales and positions of nodes.
+    population_scale = params.setdefault(
+        'population_scale',
+        np.abs(np.random.standard_cauchy()),
+    )
+    params.setdefault(
+        'group_locs',
+        np.random.normal(0, population_scale, (num_groups, num_dims)),
+    )
+    params.setdefault(
+        'group_scales',
+        np.abs(np.random.standard_cauchy(num_groups)),
+    )
+    return params
+
+
+def generate_data(group_sizes: np.ndarray, num_dims: int, **params) -> dict:
     """
-    Get a particular chain from a stan fit.
+    Generate data from a latent space model with groups.
 
     Args:
-        fit: Stan fit object to get samples from.
-        chain: Index of the chain to get or `best` to get the chain with the highest median `lp__`.
-        squeeze: Whether to remove dimensions of unit size.
+        group_sizes: Number of nodes belonging to each group.
+        num_dims: Number of dimensions of the latent space.
 
     Returns:
-        Dictionary mapping keys to samples of a particular chain.
+        data: Synthetic dataset.
     """
-    if chain == 'best':
-        chain = np.median(get_samples(fit, 'lp__', False), axis=0).argmax()
-    return {
-        key: get_samples(fit, key, False, squeeze)[..., chain]
-        for key in fit.sample_and_sampler_param_names + fit.param_names
-    }
+    params = _generate_common_data(group_sizes, num_dims, **params)
+
+    group_idx = params['group_idx'] = np.repeat(np.arange(params['num_groups']), group_sizes)
+    assert group_idx.shape == (params['num_nodes'],)
+    locs = params.setdefault(
+        'locs',
+        np.random.normal(params['group_locs'][group_idx], params['group_scales'][group_idx, None])
+    )
+
+    # Evaluate the kernel, removing self-edges.
+    kernel = params['kernel'] = evaluate_kernel(locs[:, None, :], locs[None, :, :],
+                                                params['propensity'])
+    assert kernel.shape == (params['num_nodes'], params['num_nodes'])
+    np.fill_diagonal(kernel, 0)
+
+    # Sample the adjacency matrix and aggregate it.
+    adjacency = params.setdefault(
+        'adjacency',
+        np.random.poisson(kernel),
+    )
+    grouping = evaluate_grouping_matrix(group_idx, params['num_groups'])
+    params['group_adjacency'] = (grouping @ adjacency @ grouping.T).astype(int)
+    return params
+
+
+def generate_group_data(group_sizes: np.ndarray, num_dims: int, **params) -> dict:
+    params = _generate_common_data(group_sizes, num_dims, **params)
+    group_locs = params['group_locs']
+    group_scales = params['group_scales']
+
+    # Evaluate the mean and variance for between-group connections.
+    inter_args = (
+        group_locs[:, None], group_locs[None, :], group_scales[:, None], group_scales[None, :],
+        params['propensity'], group_sizes[:, None], group_sizes[None, :]
+    )
+    mean = evaluate_aggregate_mean(*inter_args)
+    var = evaluate_aggregate_var(*inter_args)
+    assert mean.shape == (params['num_groups'], params['num_groups'])
+    assert var.shape == mean.shape
+
+    # Evaluate the diagonal terms.
+    intra_args = (
+        group_locs, group_locs, group_scales, group_scales, params['propensity'], group_sizes, None,
+    )
+    np.fill_diagonal(mean, evaluate_aggregate_mean(*intra_args))
+    np.fill_diagonal(var, evaluate_aggregate_var(*intra_args))
+
+    # Sample the grouped adjacency matrix.
+    n, p = negative_binomial_np(mean, var)
+    params.setdefault('group_adjacency', np.random.negative_binomial(n, p))
+    return params
