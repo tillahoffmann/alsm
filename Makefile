@@ -1,5 +1,7 @@
 .PHONY : clean docs lint sync tests
 
+NBEXEC = jupyter nbconvert --execute --to=html
+
 build : lint tests docs
 
 lint :
@@ -21,7 +23,10 @@ test_requirements.txt : test_requirements.in setup.py
 	pip-compile -v -o $@ $<
 
 workspace/simulation.html : scripts/simulation.ipynb
-	jupyter nbconvert --execute --to=html --output-dir=$(dir $@) --output=$(notdir $@) $<
+	${NBEXEC} --output-dir=$(dir $@) --output=$(notdir $@) $<
+
+workspace/group_simulation.html : scripts/simulation.ipynb
+	GROUP_SIMULATION=1 ${NBEXEC} --output-dir=$(dir $@) --output=$(notdir $@) $<
 
 clean :
 	rm -rf docs/_build
