@@ -80,10 +80,10 @@ def evaluate_mean(x: np.ndarray, y: np.ndarray, xscale: np.ndarray, yscale: np.n
 
     .. code-block:: stan
 
-        real evaluate_mean(vector loc1, vector loc2, real scale1, real scale2, real propensity) {
-            real d2 = squared_distance(loc1, loc2);
-            real var_ = 1 + scale1 ^ 2 + scale2 ^ 2;
-            int ndims = num_elements(loc1);
+        real evaluate_mean(vector x, vector y, real xscale, real yscale, real propensity) {
+            real d2 = squared_distance(x, y);
+            real var_ = 1 + xscale ^ 2 + yscale ^ 2;
+            int ndims = num_elements(x);
             return propensity * exp(- d2 / (2 * var_)) / var_ ^ (ndims / 2.0);
         }
     """
@@ -102,10 +102,10 @@ def evaluate_square(x: np.ndarray, y: np.ndarray, xscale: np.ndarray, yscale: np
 
     .. code-block:: stan
 
-        real evaluate_square(vector loc1, vector loc2, real scale1, real scale2, real propensity) {
-            real d2 = squared_distance(loc1, loc2);
-            real var_ = 1 + 2 * (scale1 ^ 2 + scale2 ^ 2);
-            int ndims = num_elements(loc1);
+        real evaluate_square(vector x, vector y, real xscale, real yscale, real propensity) {
+            real d2 = squared_distance(x, y);
+            real var_ = 1 + 2 * (xscale ^ 2 + yscale ^ 2);
+            int ndims = num_elements(x);
             return propensity ^ 2 * exp(- d2 / var_) / var_ ^ (ndims / 2.0);
         }
     """
@@ -125,11 +125,11 @@ def evaluate_cross(x: np.ndarray, y: np.ndarray, xscale: np.ndarray, yscale: np.
 
     .. code-block:: stan
 
-        real evaluate_cross(vector loc1, vector loc2, real scale1, real scale2, real propensity) {
-            real d2 = squared_distance(loc1, loc2);
-            real var_ = 1 + 2 * scale1 ^ 2 + scale2 ^ 2;
-            int ndims = num_elements(loc1);
-            return propensity ^ 2 * exp(- d2 / var_) / (var_ * (1 + scale2 ^ 2)) ^ (ndims / 2.0);
+        real evaluate_cross(vector x, vector y, real xscale, real yscale, real propensity) {
+            real d2 = squared_distance(x, y);
+            real var_ = 1 + 2 * xscale ^ 2 + yscale ^ 2;
+            int ndims = num_elements(x);
+            return propensity ^ 2 * exp(- d2 / var_) / (var_ * (1 + yscale ^ 2)) ^ (ndims / 2.0);
         }
     """
     d2 = np.square(x - y).sum(axis=-1)
@@ -146,9 +146,9 @@ def evaluate_aggregate_mean(x, y, xscale, yscale, propensity, nx, ny):
 
     .. code-block:: stan
 
-        real evaluate_aggregate_mean(vector loc1, vector loc2, real scale1, real scale2,
-                                     real propensity, real n1, real n2) {
-            real mean_ = evaluate_mean(loc1, loc2, scale1, scale2, propensity);
+        real evaluate_aggregate_mean(vector x, vector y, real xscale, real yscale, real propensity,
+                                     real n1, real n2) {
+            real mean_ = evaluate_mean(x, y, xscale, yscale, propensity);
             if (n2 > 0) {
                 return n1 * n2 * mean_;
             } else {
@@ -171,31 +171,25 @@ def evaluate_aggregate_var(x, y, xscale, yscale, propensity, nx, ny):
 
     .. code-block:: stan
 
-        real evaluate_aggregate_var(vector loc1, vector loc2, real scale1, real scale2,
-                                    real propensity, real n1, real n2) {
-            real y_ij = evaluate_mean(loc1, loc2, scale1, scale2, propensity);
+        real evaluate_aggregate_var(vector x, vector y, real xscale, real yscale, real propensity,
+                                    real n1, real n2) {
+            real y_ij = evaluate_mean(x, y, xscale, yscale, propensity);
             real y_ijkl = y_ij ^ 2;
-            real y_ijji = evaluate_square(loc1, loc2, scale1, scale2, propensity);
+            real y_ijji = evaluate_square(x, y, xscale, yscale, propensity);
             real y_ijij = y_ij + y_ijji;
-            real y_ijil = evaluate_cross(loc1, loc2, scale1, scale2, propensity);
-            real y_ijkj = evaluate_cross(loc2, loc1, scale2, scale1, propensity);
+            real y_ijil = evaluate_cross(x, y, xscale, yscale, propensity);
+            real y_ijkj = evaluate_cross(y, x, yscale, xscale, propensity);
 
             // Between group connections.
             if (n2 > 0) {
                 return n1 * n2 * (
-                    y_ijij
-                    + (n2 - 1) * y_ijil
-                    + (n1 - 1) * y_ijkj
-                    - (n1 + n2 - 1) * y_ijkl
+                    y_ijij + (n2 - 1) * y_ijil + (n1 - 1) * y_ijkj - (n1 + n2 - 1) * y_ijkl
                 );
             }
             // Within group connections.
             else {
                 return n1 * (n1 - 1) * (
-                    y_ijij
-                    + y_ijji
-                    + 4 * (n1 - 2) * y_ijil
-                    - 2 * (2 * n1 - 3) * y_ijkl
+                    y_ijij + y_ijji + 4 * (n1 - 2) * y_ijil - 2 * (2 * n1 - 3) * y_ijkl
                 );
             }
         }
@@ -208,22 +202,15 @@ def evaluate_aggregate_var(x, y, xscale, yscale, propensity, nx, ny):
     y_ijkj = evaluate_cross(y, x, yscale, xscale, propensity)
 
     if ny is None:
-        return nx * (nx - 1) * (
-            y_ijij
-            + y_ijji
-            + 4 * (nx - 2) * y_ijil
-            - 2 * (2 * nx - 3) * y_ijkl
-        )
+        return nx * (nx - 1) * (y_ijij + y_ijji + 4 * (nx - 2) * y_ijil - 2 * (2 * nx - 3) * y_ijkl)
     else:
-        return nx * ny * (
-            y_ijij
-            + (ny - 1) * y_ijil
-            + (nx - 1) * y_ijkj
-            - (nx + ny - 1) * y_ijkl
-        )
+        return nx * ny * (y_ijij + (ny - 1) * y_ijil + (nx - 1) * y_ijkj - (nx + ny - 1) * y_ijkl)
 
 
 def get_group_model_code():
+    """
+    Get the Stan code for the group-level model.
+    """
     return """
     functions {
         %(all_snippets)s
