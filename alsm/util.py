@@ -59,7 +59,8 @@ def align_samples(samples: np.ndarray) -> np.ndarray:
     return np.asarray(transformed)
 
 
-def evaluate_grouping_matrix(group_idx: np.ndarray, num_groups: int = None) -> np.ndarray:
+def evaluate_grouping_matrix(group_idx: np.ndarray, num_groups: int = None, dtype=int) \
+        -> np.ndarray:
     """
     Evaluate a matrix with shape `(num_groups, num_nodes)` that can be used to aggregate adjacency
     matrices.
@@ -74,7 +75,7 @@ def evaluate_grouping_matrix(group_idx: np.ndarray, num_groups: int = None) -> n
     num_nodes, = group_idx.shape
     num_groups = num_groups or group_idx.max() + 1
     np.testing.assert_array_less(group_idx, num_groups)
-    grouping = np.zeros((num_groups, num_nodes))
+    grouping = np.zeros((num_groups, num_nodes), dtype)
     grouping[group_idx, np.arange(num_nodes)] = 1
     return grouping
 
@@ -141,3 +142,19 @@ def negative_binomial_np(mean: np.ndarray, var: np.ndarray, epsilon: float = 1e-
     n = mean ** 2 / excess_var
     p = mean / var
     return n, p
+
+
+def evaluate_rotation_matrix(radians: float) -> np.ndarray:
+    """
+    Evaluate a two-dimensional rotation matrix.
+
+    Args:
+        radians: Angle of the rotation in radians.
+
+    Returns:
+        rotation: A rotation matrix.
+    """
+    return np.asarray([
+        [np.cos(radians), -np.sin(radians)],
+        [np.sin(radians), np.cos(radians)],
+    ])

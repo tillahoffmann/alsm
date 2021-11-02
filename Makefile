@@ -1,6 +1,4 @@
-.PHONY : clean docs lint sync tests
-
-NBEXEC = jupyter nbconvert --execute --to=html
+.PHONY : clean data data/addhealth docs lint sync tests
 
 build : lint tests docs
 
@@ -22,11 +20,19 @@ requirements.txt : requirements.in setup.py test_requirements.txt
 test_requirements.txt : test_requirements.in setup.py
 	pip-compile -v -o $@ $<
 
-workspace/simulation.html : scripts/simulation.ipynb
-	${NBEXEC} --output-dir=$(dir $@) --output=$(notdir $@) $<
+workspace/simulation.html : workspace/%.html : scripts/%.ipynb
+	jupyter nbconvert --execute --to=html --output-dir=$(dir $@) --output=$(notdir $@) $<
 
-workspace/group_simulation.html : scripts/simulation.ipynb
-	GROUP_SIMULATION=1 ${NBEXEC} --output-dir=$(dir $@) --output=$(notdir $@) $<
+ADDHEALTH_FILES = comm72.dat comm72_att.dat
+ADDHEALTH_TARGETS = $(addprefix data/addhealth/,${ADDHEALTH_FILES})
+
+${ADDHEALTH_TARGETS} : data/addhealth/% :
+	mkdir -p $(dir $@)
+	curl -L -o $@ https://web.archive.org/web/0if_/http://moreno.ss.uci.edu/$(notdir $@)
+
+data/addhealth : ${ADDHEALTH_TARGETS}
+
+data : data/addhealth
 
 clean :
-	rm -rf docs/_build
+	rm -rf docs/_build workspace
