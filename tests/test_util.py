@@ -80,3 +80,12 @@ def test_get_chain(dummy_fit):
     assert np.all(median_lp <= np.median(chain['lp__']))
     assert chain['x'].shape == (10, 17)
     assert chain['y'].shape == (17,)
+
+
+def test_rotation():
+    x = [1, 0]
+    y = alsm_util.evaluate_rotation_matrix(np.pi / 2) @ x
+    np.testing.assert_allclose(y, [0, 1], atol=1e-9)
+
+    y = alsm_util.evaluate_rotation_matrix(3 * np.pi / 4) @ x
+    np.testing.assert_allclose(y, np.asarray([-1, 1]) / np.sqrt(2))
