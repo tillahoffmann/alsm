@@ -158,3 +158,35 @@ def evaluate_rotation_matrix(radians: float) -> np.ndarray:
         [np.cos(radians), -np.sin(radians)],
         [np.sin(radians), np.cos(radians)],
     ])
+
+
+def estimate_mode(x: np.ndarray, scale: float = 3) -> np.ndarray:
+    """
+    Estimate the mode of a point cloud.
+
+    Args:
+        x: Point cloud with shape `(..., num_points, num_dims)`.
+        scale: Scale factor for the kernel.
+
+    Returns:
+        center: Estimated centres with shape `(..., num_dims)`.
+    """
+    *batch_shape, num_points, num_dims, = x.shape
+    batch_shape = tuple(batch_shape)
+    # Evaluate the distance between points.
+    d2 = np.sum((x[..., :, None, :] - x[..., None, :, :]) ** 2, axis=-1)
+    i = np.arange(num_points)
+    d2[..., i, i] = np.inf
+    assert d2.shape == batch_shape + (num_points, num_points)
+    # Estimate the typical scale.
+    s2 = np.median(d2.min(axis=-1), axis=-1) * scale ** 2
+    assert s2.shape == batch_shape, (s2.shape, batch_shape)
+    # Evaluate a Gaussian kernel and find the most central point by summing the kernel.
+    d2[..., i, i] = 0
+    score = np.sum(np.exp(- d2 / s2[..., None, None]), axis=-1)
+    assert score.shape == batch_shape + (num_points,)
+    # Index the input array to get the center.
+    indices = np.indices(batch_shape)
+    center = x[(*indices, score.argmax(axis=-1))]
+    assert center.shape == batch_shape + (num_dims,)
+    return center

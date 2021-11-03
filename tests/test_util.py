@@ -89,3 +89,22 @@ def test_rotation():
 
     y = alsm_util.evaluate_rotation_matrix(3 * np.pi / 4) @ x
     np.testing.assert_allclose(y, np.asarray([-1, 1]) / np.sqrt(2))
+
+
+def test_estimate_mode(figure):
+    # Generate an arc of points and ensure that the centre is roughly in the right place.
+    n = 500
+    radius = np.random.gamma(100, 1 / 100, n)
+    angle = 3 * np.pi / 4 * (1 - 2 * np.random.beta(3, 3, n))
+    x = radius * np.cos(angle)
+    y = radius * np.sin(angle)
+    ax = figure.add_subplot()
+    ax.scatter(x, y, label='samples')
+    ax.set_aspect('equal')
+    ax.scatter(x.mean(), y.mean(), label='naive')
+    center = alsm_util.estimate_mode(np.transpose([x, y]))
+    ax.scatter(*center, label='estimate')
+    ax.legend()
+
+    assert center[0] > 0.5
+    assert np.abs(center[1]) < 0.5
