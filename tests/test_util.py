@@ -94,17 +94,25 @@ def test_rotation():
 def test_estimate_mode(figure):
     # Generate an arc of points and ensure that the centre is roughly in the right place.
     n = 500
-    radius = np.random.gamma(100, 1 / 100, n)
-    angle = 3 * np.pi / 4 * (1 - 2 * np.random.beta(3, 3, n))
-    x = radius * np.cos(angle)
-    y = radius * np.sin(angle)
-    ax = figure.add_subplot()
-    ax.scatter(x, y, label='samples')
-    ax.set_aspect('equal')
-    ax.scatter(x.mean(), y.mean(), label='naive')
-    center = alsm_util.estimate_mode(np.transpose([x, y]))
-    ax.scatter(*center, label='estimate')
-    ax.legend()
 
-    assert center[0] > 0.5
-    assert np.abs(center[1]) < 0.5
+    x = np.concatenate([
+        np.random.normal([1, 1], .1, size=(n, 2)),
+        np.random.normal([-1, -1], .01, size=(n, 2)),
+    ])
+
+    ax = figure.add_subplot()
+    ax.scatter(*x.T, label='samples')
+    ax.set_aspect('equal')
+    ax.scatter(*x.mean(axis=0), label='naive')
+    mode = alsm_util.estimate_mode(x)
+    ax.scatter(*mode, label='estimate')
+    ax.legend(loc='best', fontsize='small')
+
+    np.testing.assert_array_less(mode, -.5)
+
+
+@pytest.mark.parametrize('batch_shape', [(10,), (3, 5)])
+def test_estimate_mode_batch(batch_shape):
+    x = np.random.normal(0, 1, size=(batch_shape) + (50, 3))
+    mode = alsm_util.estimate_mode(x)
+    assert mode.shape == batch_shape + (3,)
