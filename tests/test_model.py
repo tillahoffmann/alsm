@@ -190,19 +190,14 @@ def test_evaluate_aggregate_var_inter(statistics: stan.fit.Fit):
     np.testing.assert_allclose(statistics['aggregate_var_inter'], aggregate_var_inter)
 
 
-def test_group_model_from_data():
-    data = alsm_model.generate_data(np.asarray([10, 20, 30, 40]), 3)
+@pytest.mark.parametrize('group_data', [False, True])
+def test_group_model(group_data):
+    num_dims = 4
+    generator = alsm_model.generate_group_data if group_data else alsm_model.generate_data
+    data = generator(np.asarray([10, 20, 30, 40, 50]), num_dims, population_scale=1)
     data['epsilon'] = 1e-6
     posterior = stan.build(alsm_model.get_group_model_code(), data=data)
-    fit = posterior.sample(num_chains=4, num_samples=3, num_warmup=17)
-    assert fit.num_chains == 4
-
-
-def test_group_model_from_group_data():
-    data = alsm_model.generate_group_data(np.asarray([10, 20, 30, 40]), 3)
-    data['epsilon'] = 1e-6
-    posterior = stan.build(alsm_model.get_group_model_code(), data=data)
-    fit = posterior.sample(num_chains=4, num_samples=3, num_warmup=17)
+    fit = posterior.sample(num_chains=4, num_samples=5, num_warmup=17)
     assert fit.num_chains == 4
 
 
