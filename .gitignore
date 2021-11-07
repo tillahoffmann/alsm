@@ -135,3 +135,6 @@ playground/
 workspace/
 test_images/
 data/
+
+# Ignore dated files (mostly notebooks).
+????-??-??-*

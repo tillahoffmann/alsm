@@ -190,3 +190,18 @@ def estimate_mode(x: np.ndarray, scale: float = 3) -> np.ndarray:
     center = x[(*indices, score.argmax(axis=-1))]
     assert center.shape == batch_shape + (num_dims,)
     return center
+
+
+def invert_index(index: np.ndarray) -> np.ndarray:
+    """
+    Inverted an index `index` such that `x[index][inverted] == x`.
+
+    Args:
+        index: Index to invert.
+
+    Returns:
+        inverted: Inverted index.
+    """
+    inverted = np.empty_like(index)
+    inverted[index] = np.arange(index.size)
+    return inverted

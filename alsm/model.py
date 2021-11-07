@@ -227,7 +227,8 @@ def get_group_model_code():
     // Parameters of the model.
     parameters {
         real<lower=0> population_scale;
-        vector[num_dims] group_locs[num_groups];
+        vector[num_dims] center;
+        cholesky_factor_cov[num_groups - 1, num_dims] _group_locs_raw;
         real<lower=0, upper=1> propensity;
         // This is the fraction of the potential mean within-group connections we can have.
         vector<lower=0, upper=1>[num_groups] eta;
@@ -235,10 +236,17 @@ def get_group_model_code():
 
     // Estimate parameters of the negative binomial distribution.
     transformed parameters {
+        vector[num_dims] group_locs[num_groups];
         vector<lower=0>[num_groups] group_scales;
         real mu[num_groups, num_groups];
         real variance[num_groups, num_groups];
         real phi[num_groups, num_groups];
+
+        // Evaluate the group locations.
+        group_locs[1] = center;
+        for (i in 2:num_groups) {
+            group_locs[i] = center + _group_locs_raw[i - 1]';
+        }
 
         // Obtain the group scales based on the "fraction of the maximum possible mean".
         for (i in 1:num_groups) {
@@ -395,3 +403,24 @@ def generate_group_data(group_sizes: np.ndarray, num_dims: int, **params) -> dic
     n, p = negative_binomial_np(mean, var)
     params.setdefault('group_adjacency', np.random.negative_binomial(n, p))
     return params
+
+
+def apply_permutation_index(x: dict, index: np.ndarray) -> dict:
+    """
+    Apply a permutation index to data or posterior samples.
+
+    Args:
+        x: Mapping to apply the permutation to.
+        index: Permutation index to apply.
+
+    Returns:
+        y: Mapping after application of the permutation index.
+    """
+    y = {}
+    for key, value in x.items():
+        if key in {'group_locs', 'group_scales', 'group_sizes', 'eta'}:
+            value = value[index]
+        elif key in {'group_adjacency', 'ppd_group_adjacency', 'mu', 'variance', 'phi'}:
+            value = value[index][:, index]
+        y[key] = value
+    return y
