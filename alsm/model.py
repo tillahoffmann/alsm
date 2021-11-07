@@ -139,7 +139,8 @@ def evaluate_cross(x: np.ndarray, y: np.ndarray, xscale: np.ndarray, yscale: np.
 
 
 @stan_snippet
-def evaluate_aggregate_mean(x, y, xscale, yscale, propensity, nx, ny):
+def evaluate_aggregate_mean(x: np.ndarray, y: np.ndarray, xscale: np.ndarray, yscale: np.ndarray,
+                            propensity: np.ndarray, nx: np.ndarray, ny: np.ndarray) -> np.ndarray:
     """
     Evaluate the expected connection volume :math:`Y_{ab}` between two clusters :math:`a` and
     :math:`b`.
@@ -164,7 +165,8 @@ def evaluate_aggregate_mean(x, y, xscale, yscale, propensity, nx, ny):
 
 
 @stan_snippet
-def evaluate_aggregate_var(x, y, xscale, yscale, propensity, nx, ny):
+def evaluate_aggregate_var(x: np.ndarray, y: np.ndarray, xscale: np.ndarray, yscale: np.ndarray,
+                           propensity: np.ndarray, nx: np.ndarray, ny: np.ndarray) -> np.ndarray:
     """
     Evaluate the variance of the connection volume :math:`Y_{ab}` between two clusters :math:`a` and
     :math:`b`.
@@ -207,7 +209,7 @@ def evaluate_aggregate_var(x, y, xscale, yscale, propensity, nx, ny):
         return nx * ny * (y_ijij + (ny - 1) * y_ijil + (nx - 1) * y_ijkj - (nx + ny - 1) * y_ijkl)
 
 
-def get_group_model_code():
+def get_group_model_code() -> str:
     """
     Get the Stan code for the group-level model.
     """

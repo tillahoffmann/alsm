@@ -1,4 +1,4 @@
-.PHONY : clean data data/addhealth docs lint sync tests
+.PHONY : analysis clean data data/addhealth docs lint sync tests
 
 build : lint tests docs
 
@@ -20,7 +20,11 @@ requirements.txt : requirements.in setup.py test_requirements.txt
 test_requirements.txt : test_requirements.in setup.py
 	pip-compile -v -o $@ $<
 
-workspace/simulation.html workspace/addhealth.html : workspace/%.html : scripts/%.ipynb
+ANALYSIS_TARGETS = workspace/simulation.html workspace/addhealth.html workspace/theory.html
+
+analysis : ${ANALYSIS_TARGETS}
+
+${ANALYSIS_TARGETS} : workspace/%.html : scripts/%.ipynb
 	jupyter nbconvert --execute --to=html --output-dir=$(dir $@) --output=$(notdir $@) $<
 
 ADDHEALTH_FILES = comm72.dat comm72_att.dat
