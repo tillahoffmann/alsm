@@ -20,7 +20,7 @@ requirements.txt : requirements.in setup.py test_requirements.txt
 test_requirements.txt : test_requirements.in setup.py
 	pip-compile -v -o $@ $<
 
-workspace/simulation.html : workspace/%.html : scripts/%.ipynb
+workspace/simulation.html workspace/addhealth.html : workspace/%.html : scripts/%.ipynb
 	jupyter nbconvert --execute --to=html --output-dir=$(dir $@) --output=$(notdir $@) $<
 
 ADDHEALTH_FILES = comm72.dat comm72_att.dat

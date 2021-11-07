@@ -116,3 +116,11 @@ def test_estimate_mode_batch(batch_shape):
     x = np.random.normal(0, 1, size=(batch_shape) + (50, 3))
     mode = alsm_util.estimate_mode(x)
     assert mode.shape == batch_shape + (3,)
+
+
+def test_invert_index():
+    x = np.random.normal(0, 1, 27)
+    index = np.random.permutation(x.size)
+    y = x[index]
+    inverted = alsm_util.invert_index(index)
+    np.testing.assert_array_equal(x, y[inverted])

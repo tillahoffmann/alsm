@@ -199,6 +199,8 @@ def test_group_model(group_data):
     posterior = stan.build(alsm_model.get_group_model_code(), data=data)
     fit = posterior.sample(num_chains=4, num_samples=5, num_warmup=17)
     assert fit.num_chains == 4
+    np.testing.assert_array_equal((fit['_group_locs_raw'] == 0).sum(axis=(0, 1)),
+                                  num_dims * (num_dims - 1) / 2)
 
 
 def test_group_scale_change_of_variables(figure):
@@ -265,3 +267,12 @@ def test_generate_data():
     assert data['group_locs'].shape == (num_groups, num_dims)
     assert data['group_scales'].shape == (num_groups,)
     assert data['locs'].shape == (num_nodes, num_dims)
+
+
+def test_apply_permutation_index():
+    data = alsm_model.generate_data(np.asarray([10, 20, 30]), 2)
+    index = np.random.permutation(3)
+    permuted = alsm_model.apply_permutation_index(data, index)
+    actual = alsm_model.apply_permutation_index(permuted, alsm_util.invert_index(index))
+    for key, value in data.items():
+        np.testing.assert_array_equal(value, actual[key])
