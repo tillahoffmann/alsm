@@ -40,3 +40,6 @@ data : data/addhealth
 
 clean :
 	rm -rf docs/_build workspace
+
+clear_output :
+	jupyter nbconvert --clear-output scripts/*.ipynb
