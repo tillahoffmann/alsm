@@ -4,7 +4,6 @@ from matplotlib import pyplot as plt
 import numpy as np
 from scipy.linalg import orthogonal_procrustes
 import stan.fit
-import typing
 
 
 def plot_edges(locs: np.ndarray, adjacency: np.ndarray, *, alpha_min: float = 0,
@@ -123,25 +122,6 @@ def get_chain(fit: stan.fit.Fit, chain, squeeze=True) -> dict:
         key: get_samples(fit, key, False, squeeze)[..., chain]
         for key in fit.sample_and_sampler_param_names + fit.param_names
     }
-
-
-def negative_binomial_np(mean: np.ndarray, var: np.ndarray, epsilon: float = 1e-9) \
-        -> typing.Tuple[np.ndarray, np.ndarray]:
-    """
-    Convert mean and variance to the parameters of a negative binomial distribution.
-
-    Args:
-        mean: Mean of the distribution.
-        var: Variance of the distribution.
-
-    Returns:
-        n: Number of failures for the negative binomial distribution.
-        p: Success probability of each trial.
-    """
-    excess_var = np.maximum(var - mean, epsilon)
-    n = mean ** 2 / excess_var
-    p = mean / var
-    return n, p
 
 
 def evaluate_rotation_matrix(radians: float) -> np.ndarray:
