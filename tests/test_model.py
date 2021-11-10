@@ -6,6 +6,7 @@ import pytest
 from scipy import stats
 import stan
 import stan.fit
+import typing
 
 
 # Generate samples that we're going to use to compare with theoretical summary statistics.
@@ -32,12 +33,12 @@ KERNEL_INTER = alsm_model.evaluate_kernel(X[:, :, None, :], Y[:, None, :, :], PR
 
 
 @pytest.fixture(params=[True, False], ids=['weighted', 'unweighted'])
-def weighted(request):
+def weighted(request: pytest.FixtureRequest) -> bool:
     return request.param
 
 
 @pytest.fixture
-def ard_intra(weighted):
+def ard_intra(weighted: bool) -> np.ndarray:
     if weighted:
         x = np.random.poisson(KERNEL_INTRA)
     else:
@@ -46,7 +47,7 @@ def ard_intra(weighted):
 
 
 @pytest.fixture
-def ard_inter(weighted):
+def ard_inter(weighted: bool) -> np.ndarray:
     if weighted:
         x = np.random.poisson(KERNEL_INTER)
     else:
@@ -54,7 +55,7 @@ def ard_inter(weighted):
     return x.sum(axis=(1, 2))
 
 
-def _bootstrap(xs: np.ndarray, x: float, func=np.mean, ax: matplotlib.axes.Axes = None):
+def _bootstrap(xs: np.ndarray, x: float, func=np.mean, ax: matplotlib.axes.Axes = None) -> None:
     """
     Bootstrap the mean of `xs` and compare with the theoretical value `x`.
     """
@@ -89,7 +90,8 @@ def _bootstrap(xs: np.ndarray, x: float, func=np.mean, ax: matplotlib.axes.Axes 
     assert np.abs(z) < 10, f'p-value: {pvalue}; z-score: {z}'
 
 
-def _stan_python_identity(func, return_type, args, helper_functions=None, use_bar=False):
+def _stan_python_identity(func: typing.Callable, return_type: str, args: list,
+                          helper_functions: list = None, use_bar=False) -> typing.Callable:
     # Evaluate the python version of the function.
     python_data = {key: value for _, key, value in args if not key.startswith('_')}
     python = func(**python_data)
@@ -378,9 +380,7 @@ def test_betabinom_mean_var_to_params():
     trials = 100
     a, b = np.random.gamma(10, size=2)
     dist = stats.betabinom(trials, a, b)
-    mean = dist.mean()
-    var = dist.var()
 
-    a_, b_ = alsm_model.evaluate_beta_binomial_ab(trials, mean, var)
+    a_, b_ = alsm_model.evaluate_beta_binomial_ab(trials, dist.mean(), dist.var())
     np.testing.assert_allclose(a, a_)
     np.testing.assert_allclose(b, b_)

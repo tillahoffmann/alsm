@@ -142,11 +142,11 @@ def evaluate_aggregate_mean(x: np.ndarray, y: np.ndarray, xscale: np.ndarray, ys
 
         real evaluate_aggregate_mean(vector x, vector y, real xscale, real yscale, real propensity,
                                      real n1, real n2) {
-            real mean_ = evaluate_mean(x, y, xscale, yscale, propensity);
+            real mean = evaluate_mean(x, y, xscale, yscale, propensity);
             if (n2 > 0) {
-                return n1 * n2 * mean_;
+                return n1 * n2 * mean;
             } else {
-                return n1 * (n1 - 1) * mean_;
+                return n1 * (n1 - 1) * mean;
             }
         }
     """
@@ -262,18 +262,20 @@ def neg_binomial_mv_lpmf(x: np.ndarray, mean: np.ndarray, variance: np.ndarray,
 
 
 @stan_snippet
-def neg_binomial_mv_rng(mean: np.ndarray, var: np.ndarray, epsilon: float = EPSILON) -> np.ndarray:
+def neg_binomial_mv_rng(mean: np.ndarray, variance: np.ndarray, epsilon: float = EPSILON) \
+        -> np.ndarray:
     """
-    Evaluate the log probability mass function of the beta binomial distribution.
+    Draw a sample from the beta binomial distribution.
 
     .. code-block:: stan
 
-        int neg_binomial_mv_rng(real mean_, real var_, real epsilon) {
-            real phi = evaluate_neg_binomial_2_phi(mean_, var_, epsilon);
-            return neg_binomial_2_rng(fmax(mean_, epsilon), phi);
+        int neg_binomial_mv_rng(real mean, real variance, real epsilon) {
+            real phi = evaluate_neg_binomial_2_phi(mean, variance, epsilon);
+            return neg_binomial_2_rng(fmax(mean, epsilon), phi);
         }
     """
-    raise NotImplementedError
+    n, p = evaluate_neg_binomial_np(mean, variance, epsilon)
+    return np.random.negative_binomial(n, p)
 
 
 @stan_snippet
@@ -346,20 +348,21 @@ def beta_binomial_mv_lpmf(x: np.ndarray, trials: np.ndarray, mean: np.ndarray, v
 
 
 @stan_snippet
-def beta_binomial_mv_rng(trials: np.ndarray, mean: np.ndarray, var: np.ndarray,
+def beta_binomial_mv_rng(trials: np.ndarray, mean: np.ndarray, variance: np.ndarray,
                          epsilon: float = EPSILON) -> np.ndarray:
     """
-    Evaluate the log probability mass function of the beta binomial distribution.
+    Draw a sample from the beta binomial distribution.
 
     .. code-block:: stan
 
-        int beta_binomial_mv_rng(int trials, real mean_, real var_, real epsilon) {
-            real conc = evaluate_beta_binomial_phi(trials, mean_, var_, epsilon);
-            real loc = fmax(mean_ / trials, epsilon);
+        int beta_binomial_mv_rng(int trials, real mean, real variance, real epsilon) {
+            real conc = evaluate_beta_binomial_phi(trials, mean, variance, epsilon);
+            real loc = fmax(mean / trials, epsilon);
             return beta_binomial_rng(trials, conc * loc, conc * (1 - loc));
         }
     """
-    raise NotImplementedError
+    a, b = evaluate_beta_binomial_ab(trials, mean, variance, epsilon)
+    return stats.betabinom(trials, a, b).rvs()
 
 
 def get_group_model_code() -> str:
@@ -577,11 +580,10 @@ def generate_group_data(group_sizes: np.ndarray, num_dims: int, weighted: bool, 
 
     # Sample the grouped adjacency matrix.
     if weighted:
-        n, p = evaluate_neg_binomial_np(mean, var)
-        params.setdefault('group_adjacency', np.random.negative_binomial(n, p))
+        group_adjacency = neg_binomial_mv_rng(mean, var)
     else:
-        a, b = evaluate_beta_binomial_ab(params['group_trials'], mean, var)
-        params.setdefault('group_adjacency', stats.betabinom(params['group_trials'], a, b).rvs())
+        group_adjacency = beta_binomial_mv_rng(params['group_trials'], mean, var)
+    params.setdefault('group_adjacency', group_adjacency)
     return params
 
 
