@@ -7,6 +7,9 @@ on:
     branches: ["main"]
   workflow_dispatch:
 
+env:
+  cmdstanVersion: "2.28.1"
+
 jobs:
   build:
     name: Continuous Integration
@@ -21,11 +24,11 @@ jobs:
           path: |
             ${{ env.pythonLocation }}
             /home/runner/.cmdstan
-          key: ${{ env.pythonLocation }}-${{ hashFiles('test_requirements.txt') }}-with-cmdstan
+          key: ${{ env.pythonLocation }}-${{ hashFiles('test_requirements.txt') }}-${{ env.cmdstanVersion }}
       - name: "Install dependencies"
         run: |
           pip install -r test_requirements.txt
-          install_cmdstan
+          install_cmdstan --version ${{ env.cmdstanVersion }}
       - name: "Build the project"
         run: "make build"
         env:
