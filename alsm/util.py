@@ -1,9 +1,11 @@
+import cmdstanpy
+import hashlib
 import matplotlib as mpl
 import matplotlib.collections
 from matplotlib import pyplot as plt
 import numpy as np
+import pathlib
 from scipy.linalg import orthogonal_procrustes
-import stan.fit
 
 
 def plot_edges(locs: np.ndarray, adjacency: np.ndarray, *, alpha_min: float = 0,
@@ -79,49 +81,87 @@ def evaluate_grouping_matrix(group_idx: np.ndarray, num_groups: int = None, dtyp
     return grouping
 
 
-def get_samples(fit: stan.fit.Fit, param: str, flatten_chains: bool = True, squeeze: bool = True) \
-        -> np.ndarray:
+def write_stanfile(code: str, directory: str = None) -> pathlib.Path:
+    """
+    Write the model code to a file and return the path based on the code hash.
+
+    Args:
+        code: Code to write to a file.
+        directory: Directory to write the code to.
+
+    Returns:
+        path: Path to the file containing the code.
+    """
+    # Generate the path based on the code and check whether it already exists.
+    directory = pathlib.Path(directory or (pathlib.Path(cmdstanpy.cmdstan_path()) / 'models'))
+    digest = hashlib.sha256(code.encode()).hexdigest()
+    stan_file = directory / f'{digest}.stan'
+    if stan_file.is_file():
+        return stan_file
+
+    # Write the file to disk.
+    directory.mkdir(exist_ok=True)
+    with open(stan_file, 'w') as fp:
+        fp.write(code)
+    return stan_file
+
+
+def get_samples(fit: cmdstanpy.CmdStanMCMC, param: str = None,
+                flatten_chains: bool = False) -> np.ndarray:
     """
     Get samples from a stan fit.
 
     Args:
         fit: Stan fit object to get samples from.
-        param: Name of the parameter.
+        param: Name of a parameter or `None` to get all parameters.
         flatten_chains: Whether to combine samples from all chains.
-        squeeze: Whether to remove dimensions of unit size.
 
     Returns:
         samples: Posterior samples with shape `(*param_dims, num_samples * num_chains)` if
             `flatten_chains` is truthy and shape `(*param_dims, num_samples, num_chains)` otherwise.
     """
-    samples = fit[param]
-    if not flatten_chains:
-        *shape, _ = samples.shape
-        shape = shape + [-1, fit.num_chains]
-        samples = samples.reshape(shape)
-    if squeeze:
-        samples = np.squeeze(samples)
+    samples = {}
+    # Deal with the parameter samples (which come flattened by default).
+    for key, value in fit.stan_variables().items():
+        # Roll the sample axis to the back and reshape if we don't want to flatten.
+        value = np.rollaxis(value, 0, value.ndim)
+        if not flatten_chains:
+            value = value.reshape(value.shape[:-1] + (fit.chains, fit.num_draws_sampling))
+            value = np.rollaxis(value, -2, value.ndim)
+        samples[key] = value
+    # Deal with the sampler-related parameters (which come unflattened by default).
+    for key, value in fit.method_variables().items():
+        if flatten_chains:
+            value = value.reshape(fit.chains * fit.num_draws_sampling)
+        samples[key] = value
+
+    # Verify everything has the right shape.
+    for value in samples.values():
+        if flatten_chains:
+            assert value.shape[-1] == fit.chains * fit.num_draws_sampling
+        else:
+            assert value.shape[-2:] == (fit.num_draws_sampling, fit.chains)
+
+    if param:
+        return samples[param]
+
     return samples
 
 
-def get_chain(fit: stan.fit.Fit, chain, squeeze=True) -> dict:
+def get_chain(fit: cmdstanpy.CmdStanMCMC, chain) -> dict:
     """
     Get a particular chain from a stan fit.
 
     Args:
         fit: Stan fit object to get samples from.
         chain: Index of the chain to get or `best` to get the chain with the highest median `lp__`.
-        squeeze: Whether to remove dimensions of unit size.
 
     Returns:
         chain: Dictionary mapping keys to samples of a particular chain.
     """
     if chain == 'best':
-        chain = np.median(get_samples(fit, 'lp__', False), axis=0).argmax()
-    return {
-        key: get_samples(fit, key, False, squeeze)[..., chain]
-        for key in fit.sample_and_sampler_param_names + fit.param_names
-    }
+        chain = np.median(fit.method_variables()['lp__'], axis=0).argmax()
+    return {key: value[..., chain] for key, value in get_samples(fit).items()}
 
 
 def evaluate_rotation_matrix(radians: float) -> np.ndarray:

@@ -21,7 +21,9 @@ jobs:
           path: ${{ env.pythonLocation }}
           key: ${{ env.pythonLocation }}-${{ hashFiles('test_requirements.txt') }}
       - name: "Install dependencies"
-        run: "pip install -r test_requirements.txt"
+        run: |
+          pip install -r test_requirements.txt
+          install_cmdstan
       - name: "Build the project"
         run: "make build"
         env:

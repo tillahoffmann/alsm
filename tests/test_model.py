@@ -1,11 +1,10 @@
 from alsm import util as alsm_util
 from alsm import model as alsm_model
+import cmdstanpy
 import matplotlib.axes
 import numpy as np
 import pytest
 from scipy import stats
-import stan
-import stan.fit
 import typing
 
 
@@ -110,7 +109,7 @@ def _stan_python_identity(func: typing.Callable, return_type: str, args: list,
         arg_names = '| '.join([arg_names[0], ', '.join(arg_names[1:])])
     else:
         arg_names = ', '.join(arg_names)
-    posterior = stan.build("""
+    posterior = cmdstanpy.CmdStanModel(stan_file=alsm_util.write_stanfile("""
     functions {
         %(stan_code)s
     }
@@ -119,16 +118,8 @@ def _stan_python_identity(func: typing.Callable, return_type: str, args: list,
         %(stan_data)s
     }
 
-    parameters {
-        real dummy;
-    }
-
     transformed parameters {
         %(return_type)s value = %(func_name)s(%(arg_names)s);
-    }
-
-    model {
-        dummy ~ normal(0, 1);
     }
     """ % {
         'stan_data': stan_data,
@@ -136,10 +127,21 @@ def _stan_python_identity(func: typing.Callable, return_type: str, args: list,
         'func_name': func.__name__,
         'arg_names': arg_names,
         'return_type': return_type,
-    }, data=data)
-    fit = posterior.sample(num_chains=1, num_warmup=1, num_samples=1)
-    np.testing.assert_allclose(python, fit['value'])
+    }))
+    # We need to increase the number of significant figures for the comparison to work reliably
+    # (cf https://bit.ly/3oFp0y7).
+    fit = posterior.sample(data=data, chains=1, iter_sampling=1, fixed_param=True, sig_figs=15)
+    np.testing.assert_allclose(python, fit.stan_variable('value'))
     return python
+
+
+def test_evaluate_kernel():
+    _stan_python_identity(alsm_model.evaluate_kernel, 'real', [
+        ('int', '_k', NUM_DIMS),
+        ('vector[_k]', 'x', np.random.normal(0, 1, NUM_DIMS)),
+        ('vector[_k]', 'y', np.random.normal(0, 1, NUM_DIMS)),
+        ('real', 'propensity', np.random.uniform(0, 1)),
+    ])
 
 
 def test_evaluate_mean():
@@ -285,16 +287,17 @@ def test_group_model(group_data: bool, weighted: bool):
     generator = alsm_model.generate_group_data if group_data else alsm_model.generate_data
     data = generator(np.asarray([10, 20, 30, 40, 50]), num_dims, weighted, population_scale=1)
     data['epsilon'] = 1e-6
-    posterior = stan.build(alsm_model.get_group_model_code(), data=data)
-    fit = posterior.sample(num_chains=4, num_samples=5, num_warmup=17)
-    assert fit.num_chains == 4
-    np.testing.assert_array_equal((fit['_group_locs_raw'] == 0).sum(axis=(0, 1)),
+    stan_file = alsm_util.write_stanfile(alsm_model.get_group_model_code())
+    posterior = cmdstanpy.CmdStanModel(stan_file=stan_file)
+    fit = posterior.sample(data=data, chains=4, iter_sampling=5, iter_warmup=17)
+    assert fit.chains == 4
+    np.testing.assert_array_equal((fit.stan_variable('_group_locs_raw') == 0).sum(axis=(1, 2)),
                                   num_dims * (num_dims - 1) / 2)
 
 
 def test_group_scale_change_of_variables(figure):
     data = {'num_dims': 2, 'alpha': 5, 'beta': 2}
-    posterior = stan.build("""
+    posterior = cmdstanpy.CmdStanModel(stan_file=alsm_util.write_stanfile("""
     functions {
         %(evaluate_group_scale)s
         %(evaluate_group_scale_log_jac)s
@@ -317,8 +320,8 @@ def test_group_scale_change_of_variables(figure):
         group_scale ~ gamma(alpha, beta);
         target += evaluate_group_scale_log_jac(eta, num_dims);
     }
-    """ % alsm_model.STAN_SNIPPETS, data=data)
-    fit = posterior.sample(num_samples=1000)
+    """ % alsm_model.STAN_SNIPPETS))
+    fit = posterior.sample(iter_sampling=1000, data=data)
 
     # Get the samples and thin them because the samples may still have autocorrelation (which will
     # mess with the bootstrap estimate).
