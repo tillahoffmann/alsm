@@ -3,7 +3,7 @@
 build : lint tests docs
 
 lint :
-	flake8
+	flake8 --exclude playground
 
 tests :
 	pytest -v --cov=alsm --cov-fail-under=100 --cov-report=term-missing --cov-report=html

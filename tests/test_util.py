@@ -1,9 +1,10 @@
 from alsm import util as alsm_util
 from alsm import model as alsm_model
-import itertools as it
+import cmdstanpy
 import numpy as np
+import os
 import pytest
-import stan
+import tempfile
 
 
 def test_evaluate_grouping_matrix():
@@ -45,26 +46,25 @@ def test_align_samples():
 
 
 @pytest.fixture
-def dummy_fit():
-    posterior = stan.build(
+def dummy_fit() -> cmdstanpy.CmdStanMCMC:
+    posterior = cmdstanpy.CmdStanModel(stan_file=alsm_util.write_stanfile(
         'data { int n; } '
         'parameters { vector[n] x; real y; } '
         'model { x ~ normal(0, 1); y ~ normal(0, 1); }',
-        data={'n': 10},
-    )
-    return posterior.sample(num_chains=3, num_samples=17)
+    ))
+    return posterior.sample(chains=3, iter_sampling=17, data={'n': 10})
 
 
-def test_get_samples(dummy_fit):
-    for flatten_chains, squeeze in it.product([True, False], [True, False]):
+def test_get_samples(dummy_fit: cmdstanpy.CmdStanMCMC):
+    for flatten_chains in [True, False]:
         trailing_shape = (17 * 3,) if flatten_chains else (17, 3)
-        x = alsm_util.get_samples(dummy_fit, 'x', flatten_chains, squeeze)
+        x = alsm_util.get_samples(dummy_fit, 'x', flatten_chains)
         assert x.shape == (10,) + trailing_shape
-        y = alsm_util.get_samples(dummy_fit, 'y', flatten_chains, squeeze)
-        assert y.shape == (trailing_shape if squeeze else (1,) + trailing_shape)
+        y = alsm_util.get_samples(dummy_fit, 'y', flatten_chains)
+        assert y.shape == trailing_shape
 
 
-def test_get_chain(dummy_fit):
+def test_get_chain(dummy_fit: cmdstanpy.CmdStanMCMC):
     chain = alsm_util.get_chain(dummy_fit, 'best')
     median_lp = np.median(alsm_util.get_samples(dummy_fit, 'lp__', False), axis=0)
     assert median_lp.shape == (3,)
@@ -115,3 +115,14 @@ def test_invert_index():
     y = x[index]
     inverted = alsm_util.invert_index(index)
     np.testing.assert_array_equal(x, y[inverted])
+
+
+def test_write_stanfile():
+    with tempfile.TemporaryDirectory() as directory:
+        filename1 = alsm_util.write_stanfile("model code", directory=directory)
+        mtime1 = os.path.getmtime(filename1)
+        filename2 = alsm_util.write_stanfile("model code", directory=directory)
+        mtime2 = os.path.getmtime(filename2)
+
+        assert filename1 == filename2
+        assert mtime1 == mtime2

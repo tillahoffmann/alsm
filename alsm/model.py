@@ -47,6 +47,7 @@ def stan_snippet(func: typing.Callable) -> typing.Callable:
     return func
 
 
+@stan_snippet
 def evaluate_kernel(x: np.ndarray, y: np.ndarray, propensity: np.ndarray) -> np.ndarray:
     r"""
     Evaluate the connectivity kernel :math:`\alpha \exp\left(-\frac{(x-y)^2}{2}\right)`.
@@ -58,6 +59,13 @@ def evaluate_kernel(x: np.ndarray, y: np.ndarray, propensity: np.ndarray) -> np.
 
     Returns:
         kernel: Connectivity kernel with shape `(...)`.
+
+    .. code-block:: stan
+
+        real evaluate_kernel(vector x, vector y, real propensity) {
+            real d2 = squared_distance(x, y);
+            return propensity * exp(- d2 / 2);
+        }
     """
     delta2 = np.sum((x - y) ** 2, axis=-1)
     return propensity * np.exp(- delta2 / 2)
