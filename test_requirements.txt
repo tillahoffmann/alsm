@@ -16,7 +16,7 @@ certifi==2021.10.8
     # via requests
 charset-normalizer==2.0.7
     # via requests
-cmdstanpy==0.9.77
+cmdstanpy==1.0.0rc2
     # via alsm
 coverage[toml]==6.0.2
     # via pytest-cov
@@ -115,6 +115,8 @@ toml==0.10.2
     # via pytest
 tomli==1.2.2
     # via coverage
+tqdm==4.62.3
+    # via cmdstanpy
 ujson==4.2.0
     # via cmdstanpy
 urllib3==1.26.7

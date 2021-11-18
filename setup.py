@@ -9,7 +9,7 @@ setup(
         'matplotlib',
         'numpy',
         'pandas',
-        'cmdstanpy',
+        'cmdstanpy>=1.0.0rc2',
         'scipy',
     ],
     extras_require={
