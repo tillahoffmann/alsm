@@ -2,8 +2,14 @@
 
 build : lint tests docs
 
-lint :
+NOTEBOOK_FLAKE8_TARGETS = $(addsuffix .flake8,$(wildcard scripts/*.ipynb))
+$(info ${NOTEBOOK_FLAKE8_TARGETS})
+
+lint : ${NOTEBOOK_FLAKE8_TARGETS}
 	flake8 --exclude playground
+
+${NOTEBOOK_FLAKE8_TARGETS} : %.flake8 : %
+	jupyter nbconvert --to python --stdout $< | flake8 - --stdin-display-name=$< --ignore=W391
 
 tests :
 	pytest -v --cov=alsm --cov-fail-under=100 --cov-report=term-missing --cov-report=html
