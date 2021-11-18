@@ -39,7 +39,7 @@ charset-normalizer==2.0.7
     # via
     #   -r test_requirements.txt
     #   requests
-cmdstanpy==0.9.77
+cmdstanpy==1.0.0rc2
     # via
     #   -r test_requirements.txt
     #   alsm
@@ -340,7 +340,10 @@ tornado==6.1
     #   notebook
     #   terminado
 tqdm==4.62.3
-    # via -r requirements.in
+    # via
+    #   -r requirements.in
+    #   -r test_requirements.txt
+    #   cmdstanpy
 traitlets==5.1.1
     # via
     #   ipykernel

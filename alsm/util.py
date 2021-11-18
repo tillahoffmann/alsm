@@ -225,3 +225,27 @@ def invert_index(index: np.ndarray) -> np.ndarray:
     inverted = np.empty_like(index)
     inverted[index] = np.arange(index.size)
     return inverted
+
+
+def get_elbo(approx: cmdstanpy.CmdStanVB) -> float:
+    """
+    Get the evidence lower bound from the log file of a variational fit.
+
+    Args:
+        approx: Variational approximation to the posterior of a model.
+
+    Returns:
+        elbo: Evidence lower bound if the fit has converged.
+    """
+    filename, = approx.runset.stdout_files
+    with open(filename) as fp:
+        elbo = None
+        for line in fp:
+            line = line.strip()
+            if line.endswith('MEDIAN ELBO CONVERGED'):
+                parts = line.split()
+                assert len(parts) == 7
+                elbo = float(parts[1])
+
+    assert elbo is not None, 'could not parse ELBO'
+    return elbo

@@ -5,8 +5,7 @@ import typing
 from .util import evaluate_grouping_matrix
 
 
-EPSILON = 1e-15
-
+EPSILON: float = 1e-15
 
 STAN_SNIPPETS = {
     # Evaluate a group scale given the fractional mean parameter.
@@ -67,6 +66,7 @@ def evaluate_kernel(x: np.ndarray, y: np.ndarray, propensity: np.ndarray) -> np.
             return propensity * exp(- d2 / 2);
         }
     """
+    assert x.shape[-1] == y.shape[-1], 'last dimension must match'
     delta2 = np.sum((x - y) ** 2, axis=-1)
     return propensity * np.exp(- delta2 / 2)
 
@@ -494,6 +494,74 @@ def get_group_model_code() -> str:
 """ % {'all_snippets': '\n'.join(STAN_SNIPPETS.values())}
 
 
+def get_individual_model_code(group_prior: bool) -> str:
+    """
+    Get the Stan code for the individual-level model.
+
+    Args:
+        group_prior: Whether to use a Gaussian group-level prior or a global Cauchy prior.
+    """
+    lines = {}
+
+    lines['data'] = [
+        'int<lower=1> num_nodes;',
+        'int<lower=1> num_dims;',
+        'int<lower=0, upper=1> adjacency[num_nodes, num_nodes];',
+        'real<lower=0> epsilon;',
+    ]
+
+    lines['transformed data'] = [
+        'int<lower=0, upper=1> flat_adjacency[num_nodes * num_nodes];',
+        'for (i in 1:num_nodes) { for (j in 1: num_nodes) { '
+        'flat_adjacency[(i - 1) * num_nodes + j] = adjacency[i, j]; } }'
+    ]
+
+    lines['parameters'] = [
+        'real<lower=0, upper=1> propensity;',
+        'vector[num_dims] locs[num_nodes];',
+    ]
+
+    lines['transformed parameters'] = [
+    ]
+
+    lines['model'] = [
+        # We can evaluate the kernel efficiently using the Gaussian process covariance matrix. We
+        # evaluate the kernel in the model section so we don't have excessive IO.
+        'matrix[num_nodes, num_nodes] kernel = fmax('
+        'gp_exp_quad_cov(locs, sqrt(propensity), 1), epsilon);',
+        'for (i in 1:num_nodes) { kernel[i, i] = 0; }',
+        'propensity ~ beta(1, 1);',
+        'flat_adjacency ~ bernoulli(to_vector(kernel));',
+    ]
+
+    if group_prior:
+        lines['data'].extend([
+            'int<lower=1> num_groups;',
+            'int<lower=1, upper=num_groups> group_idx[num_nodes];',
+        ])
+        lines['parameters'].extend([
+            'vector[num_dims] group_locs[num_groups];',
+            'real<lower=0> group_scales[num_groups];',
+            'real<lower=0> population_scale;',
+        ])
+        lines['model'].extend([
+            'group_scales ~ cauchy(0, 1);',
+            'for (i in 1:num_groups) { group_locs[i] ~ normal(0, population_scale); }',
+            'for (i in 1:num_nodes) { int group = group_idx[i]; locs[i] '
+            '~ normal(group_locs[group], group_scales[group]); }',
+        ])
+    else:
+        lines['data'].extend([
+            'real<lower=0> population_scale;',
+        ])
+        lines['model'].extend([
+            'for (i in 1:num_nodes) { locs[i] ~ normal(0, population_scale); }',
+        ])
+
+    lines = {key: '\n'.join(value) for key, value in lines.items()}
+    return '\n'.join(f'{key} {{{value}}}' for key, value in lines.items())
+
+
 def _generate_common_data(group_sizes: np.ndarray, num_dims: int, weighted, **params) -> dict:
     params['group_sizes'] = group_sizes
     params['num_dims'] = num_dims
@@ -606,6 +674,8 @@ def apply_permutation_index(x: dict, index: np.ndarray) -> dict:
     Returns:
         y: Mapping after application of the permutation index.
     """
+    # Verify that the index truely is a permutation.
+    np.testing.assert_array_equal(np.sort(index), np.arange(index.size))
     y = {}
     for key, value in x.items():
         if key in {'group_locs', 'group_scales', 'group_sizes', 'eta'}:

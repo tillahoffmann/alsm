@@ -126,3 +126,25 @@ def test_write_stanfile():
 
         assert filename1 == filename2
         assert mtime1 == mtime2
+
+
+def test_get_elbo():
+    code = """
+        data {
+            int<lower=0> n;
+            int<lower=0, upper=1> y[n];
+        }
+
+        parameters {
+            real<lower=0,upper=1> theta;
+        }
+
+        model {
+            theta ~ beta(1,1);
+            y ~ bernoulli(theta);
+        }
+    """
+    model = cmdstanpy.CmdStanModel(stan_file=alsm_util.write_stanfile(code))
+    approx = model.variational(data={'n': 100, 'y': np.random.binomial(1, 0.7, 100)})
+    elbo = alsm_util.get_elbo(approx)
+    assert np.isfinite(elbo)
