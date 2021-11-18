@@ -387,3 +387,15 @@ def test_betabinom_mean_var_to_params():
     a_, b_ = alsm_model.evaluate_beta_binomial_ab(trials, dist.mean(), dist.var())
     np.testing.assert_allclose(a, a_)
     np.testing.assert_allclose(b, b_)
+
+
+@pytest.mark.parametrize('group_prior', [False, True])
+def test_individual_model(group_prior: bool):
+    code = alsm_model.get_individual_model_code(group_prior)
+    posterior = cmdstanpy.CmdStanModel(stan_file=alsm_util.write_stanfile(code))
+    data = alsm_model.generate_data(np.asarray([10, 20, 30]), 2, False, population_scale=1)
+    data.update({
+        'epsilon': alsm_model.EPSILON,
+        'group_idx': data['group_idx'] + 1,
+    })
+    posterior.sample(data, iter_warmup=1, iter_sampling=1, chains=1)
