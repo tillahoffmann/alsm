@@ -28,7 +28,7 @@ jobs:
       - name: "Install dependencies"
         run: |
           pip install -r test_requirements.txt
-          install_cmdstan --version ${{ env.cmdstanVersion }}
+          python -m cmdstanpy.install_cmdstan --version ${{ env.cmdstanVersion }}
       - name: "Build the project"
         run: "make build"
         env:
