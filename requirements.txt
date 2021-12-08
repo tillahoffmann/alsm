@@ -39,7 +39,7 @@ charset-normalizer==2.0.7
     # via
     #   -r test_requirements.txt
     #   requests
-cmdstanpy==1.0.0rc2
+cmdstanpy==1.0.0
     # via
     #   -r test_requirements.txt
     #   alsm
