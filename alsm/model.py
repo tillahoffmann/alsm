@@ -139,6 +139,31 @@ def evaluate_cross(x: np.ndarray, y: np.ndarray, xscale: np.ndarray, yscale: np.
     return propensity ** 2 * np.exp(- d2 / var) / (var * (1 + yscale ** 2)) ** (p / 2)
 
 
+def evaluate_triplet(x: np.ndarray, y: np.ndarray, z: np.ndarray, xscale: np.ndarray,
+                     yscale: np.ndarray, zscale: np.ndarray, propensity: np.ndarray) -> np.ndarray:
+    r"""
+    Evaluate the expected triplet term :math:`\lambda_{ij}\lambda_{il}` fors members :math:`i`,
+    :math:`j`, and :math:`l`, where :math:`i` belongs to the first cluster, and :math:`j` to the
+    second, and :math:`l` to the third.
+    """
+    # Translate so we can set x = 0 in the following expression without loss of generality.
+    y = y - x
+    z = z - x
+
+    # Evaluate some reusable constants.
+    p = x.shape[-1]
+    xscale2 = xscale ** 2
+    yscale2 = yscale ** 2
+    zscale2 = zscale ** 2
+    y2 = np.square(y).sum(axis=-1)
+    yz = (y * z).sum(axis=-1)
+    z2 = np.square(z).sum(axis=-1)
+
+    var = ((1 + yscale2) * (1 + zscale2) + xscale2 * (2 + yscale2 + zscale2))
+    chi2 = (y2 * (1 + xscale2 + zscale2) - 2 * xscale2 * yz + (1 + xscale2 + yscale2) * z2) / var
+    return propensity ** 2 * var ** (- p / 2) * np.exp(-chi2 / 2)
+
+
 @stan_snippet
 def evaluate_aggregate_mean(x: np.ndarray, y: np.ndarray, xscale: np.ndarray, yscale: np.ndarray,
                             propensity: np.ndarray, nx: np.ndarray, ny: np.ndarray) -> np.ndarray:
@@ -209,6 +234,41 @@ def evaluate_aggregate_var(x: np.ndarray, y: np.ndarray, xscale: np.ndarray, ysc
         return nx * (nx - 1) * (y_ijij + y_ijji + 4 * (nx - 2) * y_ijil - 2 * (2 * nx - 3) * y_ijkl)
     else:
         return nx * ny * (y_ijij + (ny - 1) * y_ijil + (nx - 1) * y_ijkj - (nx + ny - 1) * y_ijkl)
+
+
+def evaluate_aggregate_cov(x: np.ndarray, y: np.ndarray, z: np.ndarray, xscale: np.ndarray,
+                           yscale: np.ndarray, zscale: np.ndarray, propensity: np.ndarray, n1: int,
+                           n2: int, n3: int) -> np.ndarray:
+    """
+    Evaluate the covariance between inter-group aggregate connection volumes :math:`Y_{ab}` and
+    :math:`Y_{ac}`.
+
+    Args:
+        x:
+        y:
+        z:
+        xscale:
+        yscale:
+        zscale:
+        propensity:
+        n1:
+        n2:
+        n3:
+
+    Returns:
+        cov:
+    """
+    if z is None:
+        assert zscale is None and n3 is None, 'all or none of `z`, `zscale`, and `n3` must be given'
+        triplet = evaluate_triplet(x, x, y, xscale, xscale, yscale, propensity)
+        mean_prod = evaluate_mean(x, x, xscale, xscale, propensity) \
+            * evaluate_mean(x, y, xscale, yscale, propensity)
+        return 2 * n1 * (n1 - 1) * n2 * (triplet - mean_prod)
+    else:
+        triplet = evaluate_triplet(x, y, z, xscale, yscale, zscale, propensity)
+        mean_prod = evaluate_mean(x, y, xscale, yscale, propensity) \
+            * evaluate_mean(x, z, xscale, zscale, propensity)
+        return n1 * n2 * n3 * (triplet - mean_prod)
 
 
 def evaluate_neg_binomial_np(mean: np.ndarray, var: np.ndarray, epsilon: float = EPSILON) \
