@@ -15,20 +15,24 @@ NUM_BOOTSTRAP = 999
 PROPENSITY = np.random.uniform(0, 1)
 N1 = 12
 N2 = 15
-GROUP_SCALE1, GROUP_SCALE2 = np.random.gamma(10, .1, 2)
-GROUP_LOC1, GROUP_LOC2 = np.random.normal(0, 1, (2, NUM_DIMS))
+N3 = 17
+GROUP_SCALE1, GROUP_SCALE2, GROUP_SCALE3 = np.random.gamma(10, .1, 3)
+GROUP_LOC1, GROUP_LOC2, GROUP_LOC3 = np.random.normal(0, 1, (3, NUM_DIMS))
 X = np.random.normal(0, 1, (NUM_SAMPLES, N1, NUM_DIMS)) * GROUP_SCALE1 + GROUP_LOC1
 Y, Yp = np.random.normal(0, 1, (2, NUM_SAMPLES, N2, NUM_DIMS)) * GROUP_SCALE2 + GROUP_LOC2
+Z = np.random.normal(0, 1, (NUM_SAMPLES, N3, NUM_DIMS)) * GROUP_SCALE3 + GROUP_LOC3
 
 # Evaluate summary statistics reused across tests.
 KERNEL_XY = alsm_model.evaluate_kernel(X[:, 0], Y[:, 0], PROPENSITY)
 KERNEL_XYp = alsm_model.evaluate_kernel(X[:, 0], Yp[:, 0], PROPENSITY)
+KERNEL_XZ = alsm_model.evaluate_kernel(X[:, 0], Z[:, 0], PROPENSITY)
 
 # Evaluate ARD samples for within- and between-group connections.
 KERNEL_INTRA = alsm_model.evaluate_kernel(X[:, :, None, :], X[:, None, :, :], PROPENSITY)
 i = np.arange(N1)
 KERNEL_INTRA[:, i, i] = 0
 KERNEL_INTER = alsm_model.evaluate_kernel(X[:, :, None, :], Y[:, None, :, :], PROPENSITY)
+KERNEL_INTER_XZ = alsm_model.evaluate_kernel(X[:, :, None, :], Z[:, None, :, :], PROPENSITY)
 
 
 @pytest.fixture(params=[True, False], ids=['weighted', 'unweighted'])
@@ -54,12 +58,20 @@ def ard_inter(weighted: bool) -> np.ndarray:
     return x.sum(axis=(1, 2))
 
 
+@pytest.fixture
+def ard_inter_xz(weighted: bool) -> np.ndarray:
+    if weighted:
+        x = np.random.poisson(KERNEL_INTER_XZ)
+    else:
+        x = np.random.binomial(1, KERNEL_INTER_XZ)
+    return x.sum(axis=(1, 2))
+
+
 def _bootstrap(xs: np.ndarray, x: float, func=np.mean, ax: matplotlib.axes.Axes = None) -> None:
     """
     Bootstrap the mean of `xs` and compare with the theoretical value `x`.
     """
-    assert xs.ndim == 1, 'bootstrap tests only supported for scalar variables'
-    num_samples, = xs.shape
+    num_samples = xs.shape[0]
     # Evaluate the bootstrap samples.
     bootstrap = np.asarray([
         func(xs[np.random.randint(num_samples, size=num_samples)], axis=0)
@@ -69,7 +81,7 @@ def _bootstrap(xs: np.ndarray, x: float, func=np.mean, ax: matplotlib.axes.Axes 
     # Evaluate the pvalue and z-score.
     pvalue = (x < bootstrap).mean()
     pvalue = min(pvalue, 1 - pvalue)
-    z = (x - func(xs)) / bootstrap.std()
+    z = (x - func(xs, axis=0)) / bootstrap.std()
 
     if ax:
         ax.hist(bootstrap, density=True, bins=20)
@@ -180,6 +192,12 @@ def test_evaluate_cross():
     _bootstrap(KERNEL_XY * KERNEL_XYp, cross)
 
 
+def test_evaluate_triplet():
+    triplet = alsm_model.evaluate_triplet(GROUP_LOC1, GROUP_LOC2, GROUP_LOC3, GROUP_SCALE1,
+                                          GROUP_SCALE2, GROUP_SCALE3, PROPENSITY)
+    _bootstrap(KERNEL_XY * KERNEL_XZ, triplet)
+
+
 def test_evaluate_aggregate_mean_intra(ard_intra: np.ndarray):
     aggregate_mean_intra = _stan_python_identity(alsm_model.evaluate_aggregate_mean, 'real', [
         ('int', '_k', NUM_DIMS),
@@ -236,6 +254,18 @@ def test_evaluate_aggregate_var_inter(ard_inter: np.ndarray, weighted: bool):
         ('int<lower=0, upper=1>', 'weighted', weighted),
     ], [alsm_model.evaluate_mean, alsm_model.evaluate_square, alsm_model.evaluate_cross])
     _bootstrap(ard_inter, aggregate_var_inter, func=np.var)
+
+
+def test_evaluate_aggregate_cov_intra_inter(ard_intra: np.ndarray, ard_inter: np.ndarray):
+    cov = alsm_model.evaluate_aggregate_cov(GROUP_LOC1, GROUP_LOC2, None, GROUP_SCALE1,
+                                            GROUP_SCALE2, None, PROPENSITY, N1, N2, None)
+    _bootstrap(np.transpose((ard_intra, ard_inter)), cov, lambda xs, axis: np.cov(*xs.T)[0, 1])
+
+
+def test_evaluate_aggregate_cov_inter_inter(ard_inter: np.ndarray, ard_inter_xz: np.ndarray):
+    cov = alsm_model.evaluate_aggregate_cov(GROUP_LOC1, GROUP_LOC2, GROUP_LOC3, GROUP_SCALE1,
+                                            GROUP_SCALE2, GROUP_SCALE3, PROPENSITY, N1, N2, N3)
+    _bootstrap(np.transpose((ard_inter, ard_inter_xz)), cov, lambda xs, axis: np.cov(*xs.T)[0, 1])
 
 
 def test_evaluate_beta_binomial_phi():
