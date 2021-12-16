@@ -146,22 +146,20 @@ def evaluate_triplet(x: np.ndarray, y: np.ndarray, z: np.ndarray, xscale: np.nda
     :math:`j`, and :math:`l`, where :math:`i` belongs to the first cluster, and :math:`j` to the
     second, and :math:`l` to the third.
     """
-    # Translate so we can set x = 0 in the following expression without loss of generality.
-    y = y - x
-    z = z - x
-
     # Evaluate some reusable constants.
     p = x.shape[-1]
     xscale2 = xscale ** 2
     yscale2 = yscale ** 2
     zscale2 = zscale ** 2
-    y2 = np.square(y).sum(axis=-1)
-    yz = (y * z).sum(axis=-1)
-    z2 = np.square(z).sum(axis=-1)
+    yscale21p = 1 + yscale2
+    zscale21p = 1 + zscale2
 
-    var = ((1 + yscale2) * (1 + zscale2) + xscale2 * (2 + yscale2 + zscale2))
-    chi2 = (y2 * (1 + xscale2 + zscale2) - 2 * xscale2 * yz + (1 + xscale2 + yscale2) * z2) / var
-    return propensity ** 2 * var ** (- p / 2) * np.exp(-chi2 / 2)
+    var_x = yscale21p + zscale21p
+    loc_x = (y * zscale21p + z * yscale21p) / var_x
+    norm = yscale21p * zscale21p + xscale2 * var_x
+    chi2 = var_x / norm * np.square(x - loc_x).sum(axis=-1) \
+        + np.square(y - z).sum(axis=-1) / var_x
+    return propensity ** 2 * np.exp(- chi2 / 2) / norm ** (p / 2)
 
 
 @stan_snippet
