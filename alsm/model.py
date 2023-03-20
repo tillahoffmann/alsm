@@ -1,6 +1,6 @@
 import numpy as np
 import re
-from scipy import stats
+from scipy import special, stats
 import typing
 from .util import evaluate_grouping_matrix
 
@@ -146,22 +146,20 @@ def evaluate_triplet(x: np.ndarray, y: np.ndarray, z: np.ndarray, xscale: np.nda
     :math:`j`, and :math:`l`, where :math:`i` belongs to the first cluster, and :math:`j` to the
     second, and :math:`l` to the third.
     """
-    # Translate so we can set x = 0 in the following expression without loss of generality.
-    y = y - x
-    z = z - x
-
     # Evaluate some reusable constants.
     p = x.shape[-1]
     xscale2 = xscale ** 2
     yscale2 = yscale ** 2
     zscale2 = zscale ** 2
-    y2 = np.square(y).sum(axis=-1)
-    yz = (y * z).sum(axis=-1)
-    z2 = np.square(z).sum(axis=-1)
+    yscale21p = 1 + yscale2
+    zscale21p = 1 + zscale2
 
-    var = ((1 + yscale2) * (1 + zscale2) + xscale2 * (2 + yscale2 + zscale2))
-    chi2 = (y2 * (1 + xscale2 + zscale2) - 2 * xscale2 * yz + (1 + xscale2 + yscale2) * z2) / var
-    return propensity ** 2 * var ** (- p / 2) * np.exp(-chi2 / 2)
+    var_x = yscale21p + zscale21p
+    loc_x = (y * zscale21p + z * yscale21p) / var_x
+    norm = yscale21p * zscale21p + xscale2 * var_x
+    chi2 = var_x / norm * np.square(x - loc_x).sum(axis=-1) \
+        + np.square(y - z).sum(axis=-1) / var_x
+    return propensity ** 2 * np.exp(- chi2 / 2) / norm ** (p / 2)
 
 
 @stan_snippet
@@ -269,6 +267,40 @@ def evaluate_aggregate_cov(x: np.ndarray, y: np.ndarray, z: np.ndarray, xscale: 
         mean_prod = evaluate_mean(x, y, xscale, yscale, propensity) \
             * evaluate_mean(x, z, xscale, zscale, propensity)
         return n1 * n2 * n3 * (triplet - mean_prod)
+
+
+def evaluate_kernel_pdf(kernel: np.ndarray, delta: np.ndarray, variance: np.ndarray,
+                        num_dims: np.ndarray, propensity: np.ndarray) -> np.ndarray:
+    r"""
+    Evaluate the likelihood of observing a particular kernel value given the separation between two
+    clusters, the sum of their variances, and the number of dimensions.
+
+    Args:
+        kernel: Value at which to evaluate the density function.
+        delta: Distance between the two clusters.
+        variance: Sum of variances of the two clusters (or twice the variance for within-cluster
+                  connections).
+        num_dims: Number of dimensions of the latent space.
+
+    Returns:
+        pdf: Probability density function evaluated at the kernel value given other parameters.
+
+    Note:
+        The sum of squares of the distance between two nodes follows a scaled non-central
+        :math:`\chi^2` distribution, i.e.
+
+        .. math::
+            s^2=\sum_{i=1}^q (z_i - z_j)^2\sim\sigma^2 \chi_q\left(\frac{\delta^2}{\sigma^2}\right).
+
+        We can then obtain the distribution of kernel values by noting that
+        :math:`\lambda=\exp\left(-\frac{s^2}{2}\right)` and computing the Jacobian.
+    """
+    kernel = kernel / propensity
+    bessel_arg = np.sqrt(-2 * np.log(kernel) * (delta / variance) ** 2)
+    log = (1 / variance - 1) * np.log(kernel) - np.log(variance) - delta ** 2 / (2 * variance) \
+        + (num_dims / 4 - .5) * np.log(-2 * np.log(kernel) / delta ** 2) \
+        + np.log(special.ive(num_dims / 2 - 1, bessel_arg)) + bessel_arg
+    return np.exp(log) / propensity
 
 
 def evaluate_neg_binomial_np(mean: np.ndarray, var: np.ndarray, epsilon: float = EPSILON) \

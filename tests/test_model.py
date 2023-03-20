@@ -4,7 +4,7 @@ import cmdstanpy
 import matplotlib.axes
 import numpy as np
 import pytest
-from scipy import stats
+from scipy import integrate, stats
 import typing
 
 
@@ -429,3 +429,15 @@ def test_individual_model(group_prior: bool):
         'group_idx': data['group_idx'] + 1,
     })
     posterior.sample(data, iter_warmup=1, iter_sampling=1, chains=1)
+
+
+def test_evaluate_kernel_pdf():
+    PROPENSITY = 1
+    delta = np.linalg.norm(GROUP_LOC1 - GROUP_LOC2)
+    variance = GROUP_SCALE1 ** 2 + GROUP_SCALE2 ** 2
+    mean = alsm_model.evaluate_mean(GROUP_LOC1, GROUP_LOC2, GROUP_SCALE1, GROUP_SCALE2, PROPENSITY)
+    y, _ = integrate.quad(
+        lambda x: x * alsm_model.evaluate_kernel_pdf(x, delta, variance, NUM_DIMS, PROPENSITY),
+        1e-9, PROPENSITY - 1e-9
+    )
+    np.testing.assert_allclose(mean, y)
