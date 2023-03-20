@@ -138,3 +138,6 @@ data/
 
 # Ignore dated files (mostly notebooks).
 ????-??-??-*
+
+# Ignore raw notebooks as we use markdown notebooks.
+*.ipynb
