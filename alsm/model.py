@@ -499,7 +499,7 @@ def get_group_model_code() -> str:
     parameters {
         real<lower=0> population_scale;
         vector[num_dims] center;
-        cholesky_factor_cov[num_groups - 1, num_dims] _group_locs_raw;
+        cholesky_factor_cov[num_groups - 1, num_dims] group_locs_raw_;
         real<lower=0, upper=1> propensity;
         // This is the fraction of the potential mean within-group connections we can have.
         vector<lower=0, upper=1>[num_groups] eta;
@@ -515,7 +515,7 @@ def get_group_model_code() -> str:
         // Evaluate the group locations.
         group_locs[1] = center;
         for (i in 2:num_groups) {
-            group_locs[i] = center + _group_locs_raw[i - 1]';
+            group_locs[i] = center + group_locs_raw_[i - 1]';
         }
 
         // Obtain the group scales based on the "fraction of the maximum possible mean".

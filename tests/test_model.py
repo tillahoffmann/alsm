@@ -104,7 +104,7 @@ def _bootstrap(xs: np.ndarray, x: float, func=np.mean, ax: matplotlib.axes.Axes 
 def _stan_python_identity(func: typing.Callable, return_type: str, args: list,
                           helper_functions: list = None, use_bar=False) -> typing.Callable:
     # Evaluate the python version of the function.
-    python_data = {key: value for _, key, value in args if not key.startswith('_')}
+    python_data = {key: value for _, key, value in args if not key.endswith('_')}
     python = func(**python_data)
 
     # Evaluate the stan version of the function.
@@ -116,7 +116,7 @@ def _stan_python_identity(func: typing.Callable, return_type: str, args: list,
     data = {key: _stan_lookup(value) for _, key, value in args}
     stan_data = '\n'.join([f'{type} {name};' for type, name, _ in args])
     stan_code = [x.__stan__ for x in helper_functions or []] + [func.__stan__]
-    arg_names = [name for _, name, _ in args if not name.startswith('_')]
+    arg_names = [name for _, name, _ in args if not name.endswith('_')]
     if use_bar:
         arg_names = '| '.join([arg_names[0], ', '.join(arg_names[1:])])
     else:
@@ -149,18 +149,18 @@ def _stan_python_identity(func: typing.Callable, return_type: str, args: list,
 
 def test_evaluate_kernel():
     _stan_python_identity(alsm_model.evaluate_kernel, 'real', [
-        ('int', '_k', NUM_DIMS),
-        ('vector[_k]', 'x', np.random.normal(0, 1, NUM_DIMS)),
-        ('vector[_k]', 'y', np.random.normal(0, 1, NUM_DIMS)),
+        ('int', 'k_', NUM_DIMS),
+        ('vector[k_]', 'x', np.random.normal(0, 1, NUM_DIMS)),
+        ('vector[k_]', 'y', np.random.normal(0, 1, NUM_DIMS)),
         ('real', 'propensity', np.random.uniform(0, 1)),
     ])
 
 
 def test_evaluate_mean():
     mean = _stan_python_identity(alsm_model.evaluate_mean, 'real', [
-        ('int', '_k', NUM_DIMS),
-        ('vector[_k]', 'x', GROUP_LOC1),
-        ('vector[_k]', 'y', GROUP_LOC2),
+        ('int', 'k_', NUM_DIMS),
+        ('vector[k_]', 'x', GROUP_LOC1),
+        ('vector[k_]', 'y', GROUP_LOC2),
         ('real<lower=0>', 'xscale', GROUP_SCALE1),
         ('real<lower=0>', 'yscale', GROUP_SCALE2),
         ('real<lower=0, upper=1>', 'propensity', PROPENSITY),
@@ -170,9 +170,9 @@ def test_evaluate_mean():
 
 def test_evaluate_square():
     square = _stan_python_identity(alsm_model.evaluate_square, 'real', [
-        ('int', '_k', NUM_DIMS),
-        ('vector[_k]', 'x', GROUP_LOC1),
-        ('vector[_k]', 'y', GROUP_LOC2),
+        ('int', 'k_', NUM_DIMS),
+        ('vector[k_]', 'x', GROUP_LOC1),
+        ('vector[k_]', 'y', GROUP_LOC2),
         ('real<lower=0>', 'xscale', GROUP_SCALE1),
         ('real<lower=0>', 'yscale', GROUP_SCALE2),
         ('real<lower=0, upper=1>', 'propensity', PROPENSITY),
@@ -182,9 +182,9 @@ def test_evaluate_square():
 
 def test_evaluate_cross():
     cross = _stan_python_identity(alsm_model.evaluate_cross, 'real', [
-        ('int', '_k', NUM_DIMS),
-        ('vector[_k]', 'x', GROUP_LOC1),
-        ('vector[_k]', 'y', GROUP_LOC2),
+        ('int', 'k_', NUM_DIMS),
+        ('vector[k_]', 'x', GROUP_LOC1),
+        ('vector[k_]', 'y', GROUP_LOC2),
         ('real<lower=0>', 'xscale', GROUP_SCALE1),
         ('real<lower=0>', 'yscale', GROUP_SCALE2),
         ('real<lower=0, upper=1>', 'propensity', PROPENSITY),
@@ -200,9 +200,9 @@ def test_evaluate_triplet():
 
 def test_evaluate_aggregate_mean_intra(ard_intra: np.ndarray):
     aggregate_mean_intra = _stan_python_identity(alsm_model.evaluate_aggregate_mean, 'real', [
-        ('int', '_k', NUM_DIMS),
-        ('vector[_k]', 'x', GROUP_LOC1),
-        ('vector[_k]', 'y', GROUP_LOC1),
+        ('int', 'k_', NUM_DIMS),
+        ('vector[k_]', 'x', GROUP_LOC1),
+        ('vector[k_]', 'y', GROUP_LOC1),
         ('real<lower=0>', 'xscale', GROUP_SCALE1),
         ('real<lower=0>', 'yscale', GROUP_SCALE1),
         ('real<lower=0, upper=1>', 'propensity', PROPENSITY),
@@ -214,9 +214,9 @@ def test_evaluate_aggregate_mean_intra(ard_intra: np.ndarray):
 
 def test_evaluate_aggregate_mean_inter(ard_inter: np.ndarray):
     aggregate_mean_inter = _stan_python_identity(alsm_model.evaluate_aggregate_mean, 'real', [
-        ('int', '_k', NUM_DIMS),
-        ('vector[_k]', 'x', GROUP_LOC1),
-        ('vector[_k]', 'y', GROUP_LOC2),
+        ('int', 'k_', NUM_DIMS),
+        ('vector[k_]', 'x', GROUP_LOC1),
+        ('vector[k_]', 'y', GROUP_LOC2),
         ('real<lower=0>', 'xscale', GROUP_SCALE1),
         ('real<lower=0>', 'yscale', GROUP_SCALE2),
         ('real<lower=0, upper=1>', 'propensity', PROPENSITY),
@@ -228,9 +228,9 @@ def test_evaluate_aggregate_mean_inter(ard_inter: np.ndarray):
 
 def test_evaluate_aggregate_var_intra(ard_intra: np.ndarray, weighted: bool):
     aggregate_var_intra = _stan_python_identity(alsm_model.evaluate_aggregate_var, 'real', [
-        ('int', '_k', NUM_DIMS),
-        ('vector[_k]', 'x', GROUP_LOC1),
-        ('vector[_k]', 'y', GROUP_LOC1),
+        ('int', 'k_', NUM_DIMS),
+        ('vector[k_]', 'x', GROUP_LOC1),
+        ('vector[k_]', 'y', GROUP_LOC1),
         ('real<lower=0>', 'xscale', GROUP_SCALE1),
         ('real<lower=0>', 'yscale', GROUP_SCALE1),
         ('real<lower=0, upper=1>', 'propensity', PROPENSITY),
@@ -243,9 +243,9 @@ def test_evaluate_aggregate_var_intra(ard_intra: np.ndarray, weighted: bool):
 
 def test_evaluate_aggregate_var_inter(ard_inter: np.ndarray, weighted: bool):
     aggregate_var_inter = _stan_python_identity(alsm_model.evaluate_aggregate_var, 'real', [
-        ('int', '_k', NUM_DIMS),
-        ('vector[_k]', 'x', GROUP_LOC1),
-        ('vector[_k]', 'y', GROUP_LOC2),
+        ('int', 'k_', NUM_DIMS),
+        ('vector[k_]', 'x', GROUP_LOC1),
+        ('vector[k_]', 'y', GROUP_LOC2),
         ('real<lower=0>', 'xscale', GROUP_SCALE1),
         ('real<lower=0>', 'yscale', GROUP_SCALE2),
         ('real<lower=0, upper=1>', 'propensity', PROPENSITY),
@@ -321,7 +321,7 @@ def test_group_model(group_data: bool, weighted: bool):
     posterior = cmdstanpy.CmdStanModel(stan_file=stan_file)
     fit = posterior.sample(data=data, chains=4, iter_sampling=5, iter_warmup=17)
     assert fit.chains == 4
-    np.testing.assert_array_equal((fit.stan_variable('_group_locs_raw') == 0).sum(axis=(1, 2)),
+    np.testing.assert_array_equal((fit.stan_variable('group_locs_raw_') == 0).sum(axis=(1, 2)),
                                   num_dims * (num_dims - 1) / 2)
 
 
