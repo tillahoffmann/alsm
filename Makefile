@@ -17,10 +17,7 @@ tests :
 sync : requirements.txt
 	pip-sync
 
-requirements.txt : requirements.in setup.py test_requirements.txt
-	pip-compile -v -o $@ $<
-
-test_requirements.txt : test_requirements.in setup.py
+requirements.txt : requirements.in setup.py
 	pip-compile -v -o $@ $<
 
 NOTEBOOKS = scripts/simulation.md scripts/addhealth.md scripts/theory.md

@@ -8,7 +8,7 @@ This repository contains the notebooks and Stan and Python code required to repr
 
 Reproducing the results is straightforward by following these steps.
 
-1. Set up a clean Python environment. This code has been tested with Python 3.8, 3.9, and 3.10 on macOS and Ubuntu.
+1. Set up a clean Python environment. This code has been tested with Python 3.10 on macOS and Ubuntu.
 2. Install the Python dependencies by running `pip install -r requirements.txt` from the root directory of this repository.
 3. Install `cmdstan`, the command line interface to the probabilistic programming framework [Stan](https://mc-stan.org), by running `python -m cmdstanpy.install_cmdstan --version=2.34.0`; this may take a few minutes depending on your machine. Other recent versions of Stan may also be compatible but have not been tested.
 4. Run `make data` to download the Adolescent to Adult Health network data.
