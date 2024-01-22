@@ -21,12 +21,14 @@ import pandas as pd
 from pathlib import Path
 import re
 from scipy.linalg import orthogonal_procrustes
+import os
 
 
 mpl.rcParams['figure.dpi'] = 144
 
 DATA_ROOT = Path('../data/addhealth')
 SEED = 0
+SMOKE_TEST = "CI" in os.environ
 ```
 
 ```{code-cell} ipython3
@@ -131,8 +133,15 @@ index[num_groups - 1] = 1
 
 stan_file = alsm.write_stanfile(alsm.get_group_model_code())
 posterior = cmdstanpy.CmdStanModel(stan_file=stan_file)
-fit = posterior.sample(iter_warmup=1000, iter_sampling=1000, chains=10, inits=1e-2, seed=SEED,
-                       data=alsm.apply_permutation_index(data, index), show_progress=False)
+fit = posterior.sample(
+    iter_warmup=10 if SMOKE_TEST else 1000,
+    iter_sampling=10 if SMOKE_TEST else 1000,
+    chains=3 if SMOKE_TEST else 10,
+    inits=1e-2,
+    seed=SEED,
+    data=alsm.apply_permutation_index(data, index),
+    show_progress=False,
+)
 ```
 
 ```{code-cell} ipython3
