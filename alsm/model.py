@@ -478,14 +478,14 @@ def get_group_model_code() -> str:
         int<lower=0, upper=1> weighted;
         int<lower=1> num_groups;
         int<lower=1> num_dims;
-        int group_adjacency[num_groups, num_groups];
-        int group_sizes[num_groups];
+        array [num_groups, num_groups] int group_adjacency;
+        array [num_groups] int group_sizes;
         real<lower=0> epsilon;
     }
 
     transformed data {
         // Evaluate the number of trials for connections between different groups.
-        int<lower=0> num_trials[num_groups, num_groups];
+        array [num_groups, num_groups] int<lower=0> num_trials;
         for (i in 1:num_groups) {
             num_trials[i, i] = group_sizes[i] * (group_sizes[i] - 1);
             for (j in i + 1:num_groups) {
@@ -507,10 +507,10 @@ def get_group_model_code() -> str:
 
     // Estimate moments of the aggregate relational data.
     transformed parameters {
-        vector[num_dims] group_locs[num_groups];
+        array [num_groups] vector[num_dims] group_locs;
         vector<lower=0>[num_groups] group_scales;
-        real mu[num_groups, num_groups];
-        real variance[num_groups, num_groups];
+        array [num_groups, num_groups] real mu;
+        array [num_groups, num_groups] real variance;
 
         // Evaluate the group locations.
         group_locs[1] = center;
@@ -570,7 +570,7 @@ def get_group_model_code() -> str:
 
     // Generate posterior predictive replicates.
     generated quantities {
-        int ppd_group_adjacency[num_groups, num_groups];
+        array [num_groups, num_groups] int ppd_group_adjacency;
         for (i in 1:num_groups) {
             for (j in 1:num_groups) {
                 if (weighted) {
@@ -598,19 +598,19 @@ def get_individual_model_code(group_prior: bool) -> str:
     lines['data'] = [
         'int<lower=1> num_nodes;',
         'int<lower=1> num_dims;',
-        'int<lower=0, upper=1> adjacency[num_nodes, num_nodes];',
+        'array [num_nodes, num_nodes] int<lower=0, upper=1> adjacency;',
         'real<lower=0> epsilon;',
     ]
 
     lines['transformed data'] = [
-        'int<lower=0, upper=1> flat_adjacency[num_nodes * num_nodes];',
+        'array [num_nodes * num_nodes] int<lower=0, upper=1> flat_adjacency;',
         'for (i in 1:num_nodes) { for (j in 1: num_nodes) { '
         'flat_adjacency[(i - 1) * num_nodes + j] = adjacency[i, j]; } }'
     ]
 
     lines['parameters'] = [
         'real<lower=0, upper=1> propensity;',
-        'vector[num_dims] locs[num_nodes];',
+        'array [num_nodes] vector[num_dims] locs;',
     ]
 
     lines['transformed parameters'] = [
@@ -629,11 +629,11 @@ def get_individual_model_code(group_prior: bool) -> str:
     if group_prior:
         lines['data'].extend([
             'int<lower=1> num_groups;',
-            'int<lower=1, upper=num_groups> group_idx[num_nodes];',
+            'array [num_nodes] int<lower=1, upper=num_groups> group_idx;',
         ])
         lines['parameters'].extend([
-            'vector[num_dims] group_locs[num_groups];',
-            'real<lower=0> group_scales[num_groups];',
+            'array [num_groups] vector[num_dims] group_locs;',
+            'array [num_groups] real<lower=0> group_scales;',
             'real<lower=0> population_scale;',
         ])
         lines['model'].extend([

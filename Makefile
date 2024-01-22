@@ -1,6 +1,6 @@
-.PHONY : analysis clean data data/addhealth docs lint sync tests
+.PHONY : analysis clean data data/addhealth lint sync tests
 
-build : lint tests docs
+build : lint tests
 
 NOTEBOOK_FLAKE8_TARGETS = $(addsuffix .flake8,$(wildcard scripts/*.ipynb))
 
@@ -14,22 +14,21 @@ ${NOTEBOOK_FLAKE8_TARGETS} : %.flake8 : %
 tests :
 	pytest -v --cov=alsm --cov-fail-under=100 --cov-report=term-missing --cov-report=html
 
-docs :
-	sphinx-build . docs/_build
-
 sync : requirements.txt
 	pip-sync
 
-requirements.txt : requirements.in setup.py test_requirements.txt
+requirements.txt : requirements.in setup.py
 	pip-compile -v -o $@ $<
 
-test_requirements.txt : test_requirements.in setup.py
-	pip-compile -v -o $@ $<
+NOTEBOOKS = scripts/simulation.md scripts/addhealth.md scripts/theory.md
+IPYNBS = ${NOTEBOOKS:.md=.ipynb}
+ANALYSIS_TARGETS = $(addprefix workspace/,$(notdir ${NOTEBOOKS:.md=.html}))
 
-ANALYSIS_TARGETS = workspace/simulation.html workspace/addhealth.html workspace/theory.html
+ipynb : ${IPYNBS}
+${IPYNBS} : scripts/%.ipynb : scripts/%.md
+	jupytext --output $@ $<
 
 analysis : ${ANALYSIS_TARGETS}
-
 ${ANALYSIS_TARGETS} : workspace/%.html : scripts/%.ipynb
 	jupyter nbconvert --execute --to=html --output-dir=$(dir $@) --output=$(notdir $@) $<
 
@@ -43,10 +42,3 @@ ${ADDHEALTH_TARGETS} : data/addhealth/% :
 data/addhealth : ${ADDHEALTH_TARGETS}
 
 data : data/addhealth
-
-clean :
-	rm -rf docs/_build workspace
-
-clear_output :
-	jupyter nbconvert --clear-output --Exporter.preprocessors=whitespace_remover.WhitespaceRemover \
-		scripts/*.ipynb

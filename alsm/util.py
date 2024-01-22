@@ -6,6 +6,7 @@ from matplotlib import pyplot as plt
 import numpy as np
 import pathlib
 from scipy.linalg import orthogonal_procrustes
+from typing import Optional
 
 
 def plot_edges(locs: np.ndarray, adjacency: np.ndarray, *, alpha_min: float = 0,
@@ -39,22 +40,27 @@ def plot_edges(locs: np.ndarray, adjacency: np.ndarray, *, alpha_min: float = 0,
     return lines
 
 
-def align_samples(samples: np.ndarray) -> np.ndarray:
+def align_samples(samples: np.ndarray, reference: Optional[np.ndarray] = None) -> np.ndarray:
     """
     Align samples of locations using rigid Procrustes transformations.
 
     Args:
         samples: Samples of locations with shape `(num_samples, num_units, num_dims)`.
+        reference: Reference to align with.
 
     Returns:
         aligned: Aligned samples.
     """
+    # Actual reference which we're going to align with.
+    _reference = reference
     transformed = []
     for sample in samples:
         sample = sample - sample.mean(axis=0)
-        if transformed:
-            reference = np.mean(transformed, axis=0)
-            transform, _ = orthogonal_procrustes(sample, reference)
+        # Automatically evaluate a reference if it wasn't given.
+        if transformed and reference is None:
+            _reference = np.mean(transformed, axis=0)
+        if _reference is not None:
+            transform, _ = orthogonal_procrustes(sample, _reference)
             sample = sample @ transform
         transformed.append(sample)
     return np.asarray(transformed)

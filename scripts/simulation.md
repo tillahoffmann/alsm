@@ -146,6 +146,7 @@ cb = fig.colorbar(im, ax=ax, location='bottom', pad=0.05)
 cb.set_label(r'Correlation $\mathrm{corr}\left(Y_{ab},Y_{ac}\right)$')
 fig.tight_layout()
 fig.savefig('../workspace/correlation.pdf')
+fig.savefig('../workspace/correlation.png')
 ```
 
 ```{code-cell} ipython3
@@ -288,6 +289,7 @@ for ax, loc, label in labels:
 
 fig.tight_layout()
 fig.savefig('../workspace/simulation.pdf')
+fig.savefig('../slides/simulation.png')
 ```
 
 ```{code-cell} ipython3

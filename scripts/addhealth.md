@@ -227,7 +227,7 @@ ax2 = fig.add_subplot(gs[1, 0], sharex=ax1, sharey=ax1)
 plt.setp(ax1.xaxis.get_ticklabels(), visible=False)
 ax3 = fig.add_subplot(gs[:, 1])
 
-variational_samples = approx.variational_sample.copy()
+variational_samples = approx.variational_sample_pd.copy()
 variational_samples.columns = approx.column_names
 
 # The individual-level fit is x, the group-level fit is y.
@@ -339,5 +339,6 @@ ax.text(0.05, 0.95, '(c)', va='top', transform=ax.transAxes)
 
 gs.tight_layout(fig)
 fig.savefig('../workspace/addhealth.pdf')
+fig.savefig('../slides/addhealth.png')
 print(f'Scale adjustment factor: {scale_factor:.3f}')
 ```

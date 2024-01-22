@@ -12,14 +12,4 @@ setup(
         'cmdstanpy>=1.0.0',
         'scipy',
     ],
-    extras_require={
-        'tests': [
-            'flake8',
-            'pytest',
-            'pytest-cov',
-        ],
-        'docs': [
-            'sphinx',
-        ]
-    }
 )
