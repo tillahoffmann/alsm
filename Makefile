@@ -1,6 +1,6 @@
 .PHONY : analysis clean data data/addhealth lint sync tests
 
-build : lint tests docs
+build : lint tests
 
 NOTEBOOK_FLAKE8_TARGETS = $(addsuffix .flake8,$(wildcard scripts/*.ipynb))
 
