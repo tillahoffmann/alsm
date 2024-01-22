@@ -132,7 +132,7 @@ def test_get_elbo():
     code = """
         data {
             int<lower=0> n;
-            int<lower=0, upper=1> y[n];
+            array [n] int<lower=0, upper=1> y;
         }
 
         parameters {
