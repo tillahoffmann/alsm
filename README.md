@@ -15,4 +15,6 @@ Reproducing the results is straightforward by following these steps.
 5. Run `make data` to download the Adolescent to Adult Health network data.
 6. Run `make analysis` to run all analysis. The results will be saved in a new `workspace` folder at the root of the repository. Results comprise `.html` files summarizing the analysis and `.pdf` and `.png` files for the figures in the manuscript.
 
+You can also review the [GitHub Action workflow](.github/workflows/main.yml) that performs the analysis; example runs are available [here](https://github.com/tillahoffmann/alsm/actions/workflows/main.yml).
+
 The source code comprises two parts: first, the Python package `alsm` (containing the Stan model code and utility functions) and, second, Jupyter notebooks stored as `.md` [jupytext](https://jupytext.readthedocs.io/) files in the `scripts` folder (containing the code to run analysis and produce figures). If you are familiar with jupytext, go right ahead and open the `.md` files as a notebook. If you prefer traditional `.ipynb` files, run `make ipynb` to generate `.ipynb` notebooks which will be stored in the `scripts` folder.

@@ -20,9 +20,11 @@ import matplotlib as mpl
 import numpy as np
 from scipy.linalg import orthogonal_procrustes
 from scipy import stats
+import os
 
 
 mpl.rcParams['figure.dpi'] = 144
+SMOKE_TEST = "CI" in os.environ
 ```
 
 ```{code-cell} ipython3
@@ -163,8 +165,15 @@ data['epsilon'] = 1e-20
 
 # Fit the model.
 posterior = cmdstanpy.CmdStanModel(stan_file=alsm.write_stanfile(alsm.get_group_model_code()))
-fit = posterior.sample(alsm.apply_permutation_index(data, index), chains=10, iter_warmup=1000,
-                       iter_sampling=1000, seed=seed, inits=1e-2, show_progress=False)
+fit = posterior.sample(
+    alsm.apply_permutation_index(data, index),
+    iter_warmup=10 if SMOKE_TEST else 1000,
+    iter_sampling=10 if SMOKE_TEST else 1000,
+    chains=3 if SMOKE_TEST else 10,
+    seed=seed,
+    inits=1e-2,
+    show_progress=False,
+)
 ```
 
 ```{code-cell} ipython3
@@ -289,7 +298,7 @@ for ax, loc, label in labels:
 
 fig.tight_layout()
 fig.savefig('../workspace/simulation.pdf')
-fig.savefig('../slides/simulation.png')
+fig.savefig('../workspace/simulation.png')
 ```
 
 ```{code-cell} ipython3
