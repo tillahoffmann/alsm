@@ -227,7 +227,7 @@ ax2 = fig.add_subplot(gs[1, 0], sharex=ax1, sharey=ax1)
 plt.setp(ax1.xaxis.get_ticklabels(), visible=False)
 ax3 = fig.add_subplot(gs[:, 1])
 
-variational_samples = approx.variational_sample.copy()
+variational_samples = approx.variational_sample_pd.copy()
 variational_samples.columns = approx.column_names
 
 # The individual-level fit is x, the group-level fit is y.
