@@ -26,9 +26,14 @@ requirements.txt : requirements.in setup.py test_requirements.txt
 test_requirements.txt : test_requirements.in setup.py
 	pip-compile -v -o $@ $<
 
-ANALYSIS_TARGETS = workspace/simulation.html workspace/addhealth.html workspace/theory.html
+NOTEBOOKS = scripts/simulation.md scripts/addhealth.md scripts/theory.md
+IPYNBS = ${NOTEBOOKS:.md=.ipynb}
+ANALYSIS_TARGETS = $(addprefix workspace/,$(notdir ${NOTEBOOKS:.md=.html}))
 
 analysis : ${ANALYSIS_TARGETS}
+
+${IPYNBS} : scripts/%.ipynb : scripts/%.md
+	jupytext --output $@ $<
 
 ${ANALYSIS_TARGETS} : workspace/%.html : scripts/%.ipynb
 	jupyter nbconvert --execute --to=html --output-dir=$(dir $@) --output=$(notdir $@) $<
