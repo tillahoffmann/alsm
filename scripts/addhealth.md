@@ -339,6 +339,6 @@ ax.text(0.05, 0.95, '(c)', va='top', transform=ax.transAxes)
 
 gs.tight_layout(fig)
 fig.savefig('../workspace/addhealth.pdf')
-fig.savefig('../slides/addhealth.png')
+fig.savefig('../workspace/addhealth.png')
 print(f'Scale adjustment factor: {scale_factor:.3f}')
 ```

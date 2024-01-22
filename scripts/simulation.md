@@ -289,7 +289,7 @@ for ax, loc, label in labels:
 
 fig.tight_layout()
 fig.savefig('../workspace/simulation.pdf')
-fig.savefig('../slides/simulation.png')
+fig.savefig('../workspace/simulation.png')
 ```
 
 ```{code-cell} ipython3

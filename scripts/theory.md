@@ -103,7 +103,7 @@ ax.legend(loc='upper right', fontsize='small')
 
 fig.tight_layout()
 fig.savefig('../workspace/kernel.pdf')
-fig.savefig('../slides/kernel.png')
+fig.savefig('../workspace/kernel.png')
 ```
 
 # Change of variables for group scales
