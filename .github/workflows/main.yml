@@ -20,15 +20,15 @@ jobs:
         with:
           python-version: "3.10"
           cache: pip
-      - name: "Install dependencies"
-        run: |
-          pip install -r requirements.txt
-          python -m cmdstanpy.install_cmdstan --version ${{ env.cmdstanVersion }}
+      - name: "Install Python dependencies"
+        run: pip install -r requirements.txt
       - name: "Cache cmdstan"
         uses: actions/cache@v4
         with:
           path: /home/runner/.cmdstan
           key: cmdstan-${{ env.cmdstanVersion }}
+      - name: "Install cmdstan"
+        run: python -m cmdstanpy.install_cmdstan --version ${{ env.cmdstanVersion }}
       - name: "Build the project"
         run: "make build"
         env:
