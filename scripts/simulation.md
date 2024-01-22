@@ -169,7 +169,7 @@ fit = posterior.sample(
     alsm.apply_permutation_index(data, index),
     iter_warmup=10 if SMOKE_TEST else 1000,
     iter_sampling=10 if SMOKE_TEST else 1000,
-    chains=3 if SMOKE_TEST else 10,
+    chains=3 if SMOKE_TEST else 16,
     seed=seed,
     inits=1e-2,
     show_progress=False,
