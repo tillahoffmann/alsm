@@ -1,4 +1,4 @@
-name: CI
+name: Latent Space Approaches to Aggregate Network Data
 
 on:
   push:
@@ -12,7 +12,7 @@ env:
 
 jobs:
   build:
-    name: Continuous Integration
+    name: Build
     runs-on: "ubuntu-latest"
     steps:
       - uses: "actions/checkout@v4"
@@ -35,3 +35,25 @@ jobs:
           # Our tests may contain a number of stochastic elements. Setting a seed will make sure
           # they're not flaky (but also hide potential issues).
           SEED: "0"
+  results:
+    name: Reproduction
+    runs-on: "ubuntu-latest"
+    steps:
+      - uses: "actions/checkout@v4"
+      - uses: "actions/setup-python@v5"
+        with:
+          python-version: "3.10"
+          cache: pip
+      - name: "Install Python dependencies"
+        run: pip install -r requirements.txt
+      - name: "Cache cmdstan"
+        uses: actions/cache@v4
+        with:
+          path: /home/runner/.cmdstan
+          key: cmdstan-${{ env.cmdstanVersion }}
+      - name: "Install cmdstan"
+        run: python -m cmdstanpy.install_cmdstan --version ${{ env.cmdstanVersion }}
+      - name: "Download data"
+        run: make data
+      - name: "Perform analysis"
+        run: make analysis
