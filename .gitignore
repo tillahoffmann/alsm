@@ -141,3 +141,4 @@ data/
 
 # Ignore raw notebooks as we use markdown notebooks.
 *.ipynb
+*.pdf
