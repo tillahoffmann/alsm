@@ -20,10 +20,11 @@ def test_evaluate_grouping_matrix():
 
 
 def test_plot_edges():
-    data = alsm_model.generate_data(np.asarray([10, 20]), 2, population_scale=.1, propensity=1,
-                                    weighted=False)
-    collection = alsm_util.plot_edges(data['locs'], data['adjacency'])
-    assert collection.get_alpha().size == (data['adjacency'] > 0).sum()
+    data = alsm_model.generate_data(
+        np.asarray([10, 20]), 2, population_scale=0.1, propensity=1, weighted=False
+    )
+    collection = alsm_util.plot_edges(data["locs"], data["adjacency"])
+    assert collection.get_alpha().size == (data["adjacency"] > 0).sum()
 
 
 def test_align_samples():
@@ -33,10 +34,9 @@ def test_align_samples():
     # Construct rotation matrices with shape (2, 2, num_samples).
     angles = np.random.uniform(0, 2 * np.pi, 20)
     angles[0] = 0
-    rotations = np.asarray([
-        [np.cos(angles), -np.sin(angles)],
-        [np.sin(angles), np.cos(angles)]
-    ])
+    rotations = np.asarray(
+        [[np.cos(angles), -np.sin(angles)], [np.sin(angles), np.cos(angles)]]
+    )
     # Get modified samples.
     samples = (reference @ rotations + offsets[:, None, :]).T
     # Align the samples and compare with reference.
@@ -47,30 +47,32 @@ def test_align_samples():
 
 @pytest.fixture
 def dummy_fit() -> cmdstanpy.CmdStanMCMC:
-    posterior = cmdstanpy.CmdStanModel(stan_file=alsm_util.write_stanfile(
-        'data { int n; } '
-        'parameters { vector[n] x; real y; } '
-        'model { x ~ normal(0, 1); y ~ normal(0, 1); }',
-    ))
-    return posterior.sample(chains=3, iter_sampling=17, data={'n': 10})
+    posterior = cmdstanpy.CmdStanModel(
+        stan_file=alsm_util.write_stanfile(
+            "data { int n; } "
+            "parameters { vector[n] x; real y; } "
+            "model { x ~ normal(0, 1); y ~ normal(0, 1); }",
+        )
+    )
+    return posterior.sample(chains=3, iter_sampling=17, data={"n": 10})
 
 
 def test_get_samples(dummy_fit: cmdstanpy.CmdStanMCMC):
     for flatten_chains in [True, False]:
         trailing_shape = (17 * 3,) if flatten_chains else (17, 3)
-        x = alsm_util.get_samples(dummy_fit, 'x', flatten_chains)
+        x = alsm_util.get_samples(dummy_fit, "x", flatten_chains)
         assert x.shape == (10,) + trailing_shape
-        y = alsm_util.get_samples(dummy_fit, 'y', flatten_chains)
+        y = alsm_util.get_samples(dummy_fit, "y", flatten_chains)
         assert y.shape == trailing_shape
 
 
 def test_get_chain(dummy_fit: cmdstanpy.CmdStanMCMC):
-    chain = alsm_util.get_chain(dummy_fit, 'best')
-    median_lp = np.median(alsm_util.get_samples(dummy_fit, 'lp__', False), axis=0)
+    chain = alsm_util.get_chain(dummy_fit, "best")
+    median_lp = np.median(alsm_util.get_samples(dummy_fit, "lp__", False), axis=0)
     assert median_lp.shape == (3,)
-    assert np.all(median_lp <= np.median(chain['lp__']))
-    assert chain['x'].shape == (10, 17)
-    assert chain['y'].shape == (17,)
+    assert np.all(median_lp <= np.median(chain["lp__"]))
+    assert chain["x"].shape == (10, 17)
+    assert chain["y"].shape == (17,)
 
 
 def test_rotation():
@@ -83,26 +85,29 @@ def test_rotation():
 
 
 def test_estimate_mode(figure):
-    # Generate an arc of points and ensure that the centre is roughly in the right place.
+    # Generate an arc of points and ensure that the centre is roughly in the right
+    # place.
     n = 500
 
-    x = np.concatenate([
-        np.random.normal([1, 1], .1, size=(n, 2)),
-        np.random.normal([-1, -1], .01, size=(n, 2)),
-    ])
+    x = np.concatenate(
+        [
+            np.random.normal([1, 1], 0.1, size=(n, 2)),
+            np.random.normal([-1, -1], 0.01, size=(n, 2)),
+        ]
+    )
 
     ax = figure.add_subplot()
-    ax.scatter(*x.T, label='samples')
-    ax.set_aspect('equal')
-    ax.scatter(*x.mean(axis=0), label='naive')
+    ax.scatter(*x.T, label="samples")
+    ax.set_aspect("equal")
+    ax.scatter(*x.mean(axis=0), label="naive")
     mode = alsm_util.estimate_mode(x)
-    ax.scatter(*mode, label='estimate')
-    ax.legend(loc='best', fontsize='small')
+    ax.scatter(*mode, label="estimate")
+    ax.legend(loc="best", fontsize="small")
 
-    np.testing.assert_array_less(mode, -.5)
+    np.testing.assert_array_less(mode, -0.5)
 
 
-@pytest.mark.parametrize('batch_shape', [(10,), (3, 5)])
+@pytest.mark.parametrize("batch_shape", [(10,), (3, 5)])
 def test_estimate_mode_batch(batch_shape):
     x = np.random.normal(0, 1, size=(batch_shape) + (50, 3))
     mode = alsm_util.estimate_mode(x)
@@ -145,6 +150,6 @@ def test_get_elbo():
         }
     """
     model = cmdstanpy.CmdStanModel(stan_file=alsm_util.write_stanfile(code))
-    approx = model.variational(data={'n': 100, 'y': np.random.binomial(1, 0.7, 100)})
+    approx = model.variational(data={"n": 100, "y": np.random.binomial(1, 0.7, 100)})
     elbo = alsm_util.get_elbo(approx)
     assert np.isfinite(elbo)
