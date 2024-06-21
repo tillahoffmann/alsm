@@ -590,7 +590,7 @@ def get_group_model_code(
         target += - (log(population_scale) + sum(log(group_scales)));
         """
     else:
-        raise ValueError(scale_prior_type)
+        raise ValueError(scale_prior_type)  # pragma: no cover
 
     return """
     functions {
