@@ -4,7 +4,7 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.14.5
+    jupytext_version: 1.14.7
 kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
@@ -13,10 +13,13 @@ kernelspec:
 
 ```{code-cell} ipython3
 import alsm
+import collections
 from matplotlib import pyplot as plt
 import matplotlib as mpl
 import numpy as np
 from scipy import special, stats
+import itertools
+import typing
 
 
 mpl.rcParams['figure.dpi'] = 144
@@ -62,8 +65,8 @@ ax.text(0.05, 0.95, '(a)', va='top', transform=ax.transAxes, color='w')
 ax = ax2
 num_samples = 100000
 group_sizes = np.asarray([10, 15])
-means = np.asarray([[0, 0], [1, 0]])
-scale = 5
+means = np.asarray([[0, 0], [1.5, 0]])
+scale = 2
 x, y = [np.random.normal(mean, scale, (num_samples, size, 2)) for mean, size
         in zip(means, group_sizes)]
 rate = alsm.evaluate_kernel(x[:, :, None], y[:, None], 1)
@@ -87,13 +90,22 @@ else:
 lin = np.arange(agg.min(), agg.max() + 1)
 ax.plot(lin, dist.pmf(lin), label=label)
 
+# Show Poisson approximation.
+total = np.prod(group_sizes)
+binom_dist = stats.binom(total, mean / total)
+ax.plot(lin, binom_dist.pmf(lin), label="binomial\napproximation", ls="--")
+poisson_dist = stats.poisson(mean)
+ax.plot(lin, poisson_dist.pmf(lin), label="Poisson\napproximation", ls=":")
+
 ax.set_xlabel('Aggregate connections $Y_{ab}$')
-ax.set_ylabel('$P(Y_{ab})$')
+ax.set_ylabel('$p(Y_{ab})$')
 ax.yaxis.major.formatter.useMathText = True
 ax.yaxis.major.formatter.set_powerlimits((0, 0))
 ax.text(0.05, 0.95, '(b)', va='top', transform=ax.transAxes)
+
+a, b = means
 lines = [
-    r'$\delta=1$',
+    fr'$\delta={np.linalg.norm(a - b)}$',
     fr'$\sigma={scale}$',
     f'$n_a={group_sizes[0]}$',
     f'$n_b={group_sizes[1]}$',
@@ -104,6 +116,102 @@ ax.legend(loc='upper right', fontsize='small')
 fig.tight_layout()
 fig.savefig('../workspace/kernel.pdf')
 fig.savefig('../workspace/kernel.png')
+```
+
+# Evaluating the quality of the approximation
+
+```{code-cell} ipython3
+fig, axes = plt.subplots(3, 3)
+
+num_samples = 100000
+
+class Config(typing.NamedTuple):
+    n1: int
+    n2: int
+    delta: float
+    scale1: float
+    scale2: float
+    propensity: float
+    loc: str
+
+configs = [
+    # Small counts.
+    Config(3, 4, 0, .1, .1, 0.8, "top left"),
+    Config(3, 4, 0, 2, 2, 0.8, "top right"),
+    Config(3, 4, 2, .5, .5, 0.8, "top right"),
+    # Medium counts.
+    Config(10, 11, 0, 3, 4, 0.5, "top right"),
+    Config(10, 11, 1, .5, .3, 0.1, "top right"),
+    Config(10, 11, 10, 4, 5, 0.8, "top right"),
+    # Large counts.
+    Config(3, 40, 1, 2, 2, 0.1, "top right"),
+    Config(10, 40, 0, .7, 2, 0.5, "top right"),
+    Config(40, 40, 2, 1, 3, 0.5, "top right"),
+]
+
+for ax, config in zip(axes.ravel(), configs):
+    n1, n2, delta, scale1, scale2, prop, loc = config
+    
+    x = np.random.normal(0, scale1, (num_samples, n1, 2))
+    y = np.random.normal([0, delta], scale2, (num_samples, n2, 2))
+    rate = alsm.evaluate_kernel(x[:, :, None], y[:, None], prop)
+    agg = np.random.binomial(1, rate).sum(axis=(1, 2))
+
+    mean = alsm.evaluate_aggregate_mean(
+        np.zeros(2), 
+        np.asarray([0, delta]), 
+        scale1, 
+        scale2, 
+        prop,
+        n1, 
+        n2,
+    )
+    var = alsm.evaluate_aggregate_var(
+        np.zeros(2), 
+        np.asarray([0, delta]), 
+        scale1, 
+        scale2, 
+        prop, 
+        n1, 
+        n2, 
+        weighted=False,
+    )
+    trials = np.prod(n1 * n2)
+    betabinom_dist = stats.betabinom(trials, *alsm.evaluate_beta_binomial_ab(trials, mean, var))
+    
+    # Evaluate the empirical distribution and chop off values before the first non-zero bin.
+    pmf = np.bincount(agg) / num_samples
+    x = np.arange(pmf.size)
+    first = np.argmax(pmf > 0)
+    pmf = pmf[first:]
+    x = x[first:]
+    
+    ax.plot(x, betabinom_dist.pmf(x), marker=".")
+    ax.bar(x, pmf, width=1, color="silver")
+    ax.set_yticks([])
+    
+    va, ha = loc.split()
+    lookup = {"left": 0.05, "right": 0.95, "top": 0.95, "bottom": 0.05}
+    text = "\n".join([
+        f"$n_a={n1}$",
+        f"$n_b={n2}$",
+        f"$\\theta={prop}$",
+        f"$\\delta={delta}$",
+        f"$\\sigma_a={scale1}$",
+        f"$\\sigma_b={scale2}$",
+    ])
+    ax.text(lookup[ha], lookup[va], text, transform=ax.transAxes, ha=ha, va=va, fontsize="x-small")
+    ax.xaxis.set_major_locator(mpl.ticker.MaxNLocator(5, integer=True))
+    
+    print(agg.mean() / np.asarray([n1, n2]))
+    
+for ax in axes[-1]:
+    ax.set_xlabel("Aggregate connections $Y_{ab}$")
+for ax in axes[:, 0]:
+    ax.set_ylabel("Density $p\\left(Y_{ab}\\right)$")
+    
+fig.tight_layout()
+fig.savefig("../workspace/betabinom-approximations.pdf")
 ```
 
 # Change of variables for group scales
