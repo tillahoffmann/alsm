@@ -2,14 +2,14 @@ from setuptools import find_packages, setup
 
 
 setup(
-    name='alsm',
+    name="alsm",
     packages=find_packages(),
-    version='0.1.0',
+    version="0.1.0",
     install_requires=[
-        'matplotlib',
-        'numpy',
-        'pandas',
-        'cmdstanpy>=1.0.0',
-        'scipy',
+        "matplotlib",
+        "numpy",
+        "pandas",
+        "cmdstanpy>=1.0.0",
+        "scipy",
     ],
 )

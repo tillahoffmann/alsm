@@ -6,6 +6,7 @@ NOTEBOOK_FLAKE8_TARGETS = $(addsuffix .flake8,$(wildcard scripts/*.ipynb))
 
 lint : ${NOTEBOOK_FLAKE8_TARGETS}
 	flake8 --exclude playground
+	black --check .
 
 ${NOTEBOOK_FLAKE8_TARGETS} : %.flake8 : %
 	jupyter nbconvert --to python --stdout $< | flake8 - --stdin-display-name=$< --ignore=W391 \

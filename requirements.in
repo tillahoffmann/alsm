@@ -1,4 +1,5 @@
 -e file:
+black
 flake8
 jupyter
 jupytext
