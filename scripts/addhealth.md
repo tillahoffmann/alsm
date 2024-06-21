@@ -264,7 +264,7 @@ alsm.plot_edges(xs, adjacency, alpha=.2, ax=ax1, zorder=0)
 alsm.plot_edges(y, group_adjacency, ax=ax2, zorder=1, lw=3)
 
 pts_kwargs = {
-    'cmap': mpl.cm.get_cmap('viridis', group_attributes.grade.nunique()),
+    'cmap': mpl.colormaps.get_cmap('viridis', group_attributes.grade.nunique()),
     'vmin': group_attributes.grade.min() - .5,
     'vmax': group_attributes.grade.max() + .5,
 }
