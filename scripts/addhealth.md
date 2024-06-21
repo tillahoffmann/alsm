@@ -4,7 +4,7 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.14.5
+    jupytext_version: 1.14.7
 kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
@@ -134,10 +134,10 @@ index[num_groups - 1] = 1
 stan_file = alsm.write_stanfile(alsm.get_group_model_code())
 posterior = cmdstanpy.CmdStanModel(stan_file=stan_file)
 fit = posterior.sample(
-    iter_warmup=10 if SMOKE_TEST else 1000,
-    iter_sampling=10 if SMOKE_TEST else 1000,
-    chains=3 if SMOKE_TEST else 10,
-    inits=1e-2,
+    iter_warmup=10 if SMOKE_TEST else None,
+    iter_sampling=10 if SMOKE_TEST else None,
+    chains=3 if SMOKE_TEST else 20,
+    # inits=1e-2,
     seed=SEED,
     data=alsm.apply_permutation_index(data, index),
     show_progress=False,
@@ -156,8 +156,7 @@ pd.DataFrame({
 ```
 
 ```{code-cell} ipython3
-# We hardcode chain number 2 here because the best-performing chain has divergent samples.
-chain = alsm.get_chain(fit, 2)
+chain = alsm.get_chain(fit, 1)
 chain = alsm.apply_permutation_index(chain, alsm.invert_index(index))
 print('median leapfrog steps in chain', np.median(chain['n_leapfrog__']))
 print('num divergent in chain', np.sum(chain['divergent__']))
