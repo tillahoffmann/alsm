@@ -25,26 +25,19 @@ import os
 
 mpl.rcParams['figure.dpi'] = 144
 SMOKE_TEST = "CI" in os.environ
+SEED = int(os.environ.get("SEED", "7"))
+NUM_GROUPS = int(os.environ.get("NUM_GROUPS", "10"))
+NUM_DIMS = int(os.environ.get("NUM_DIMS", "2"))
 ```
 
 ```{code-cell} ipython3
-# Generate a network.
-seed = 2  # Good but no arcs.
-seed = 14  # Reasonable example but very overlapping groups.
-seed = 20  # Good but very wiggly.
-seed = 24  # Good but no arcs.
-seed = 31  # Good example, including arcs.
-seed = 7
-num_groups = 10
-num_dims = 2
-
-np.random.seed(seed)
-group_sizes = np.random.poisson(100, num_groups)
+np.random.seed(SEED)
+group_sizes = np.random.poisson(100, NUM_GROUPS)
 data = alsm.generate_data(
     group_sizes,
-    num_dims,
+    NUM_DIMS,
     weighted=False,
-    group_scales=np.random.gamma(3, 1 / 5, num_groups),
+    group_scales=np.random.gamma(3, 1 / 5, NUM_GROUPS),
     population_scale=2.5,
     propensity=0.1,
 )
@@ -56,7 +49,7 @@ alsm.plot_edges(data['locs'], data['adjacency'], ax=ax1, alpha=.2, zorder=0)
 ax1.set_aspect('equal')
 
 # Plot the aggregate network and the radius of clusters.
-pts = ax2.scatter(*data['group_locs'].T, c=np.arange(num_groups), cmap='tab10')
+pts = ax2.scatter(*data['group_locs'].T, c=np.arange(NUM_GROUPS), cmap='tab10')
 alsm.plot_edges(data['group_locs'], data['group_adjacency'], ax=ax2, zorder=0, alpha_min=.1)
 ax2.set_aspect('equal')
 
@@ -77,10 +70,10 @@ mpl.cm.tab10
 ```
 
 ```{code-cell} ipython3
-pairs = list(it.combinations(range(num_groups), 2))
+pairs = list(it.combinations(range(NUM_GROUPS), 2))
 
 var = np.nan * np.ones(len(pairs))
-cov = np.nan * np.ones_like(var)[:, None] * np.ones(num_groups)
+cov = np.nan * np.ones_like(var)[:, None] * np.ones(NUM_GROUPS)
 corr = np.nan * np.ones_like(cov)
 group_locs = data['group_locs']
 group_scales = data['group_scales']
@@ -92,7 +85,7 @@ for i, (a, b) in enumerate(pairs):
         group_locs[a], group_locs[b], group_scales[a], group_scales[b],
         propensity, group_sizes[a], group_sizes[b], weighted
     )
-    for c in range(num_groups):
+    for c in range(NUM_GROUPS):
         var_ac = alsm.evaluate_aggregate_var(
             group_locs[a], group_locs[c], group_scales[a], group_scales[c],
             propensity, group_sizes[a], group_sizes[c], weighted
@@ -126,13 +119,13 @@ size = 2
 fig, ax = plt.subplots()
 ax.patch.set_facecolor('k')
 vmax = np.nanmax(np.abs(corr))
-cmap = mpl.cm.get_cmap('coolwarm').copy()
+cmap = mpl.colormaps.get_cmap('coolwarm').copy()
 cmap.set_bad('w')
 im = ax.imshow(corr.T, vmax=vmax, vmin=-vmax, cmap=cmap)
 ax.imshow(np.transpose(pairs), cmap='tab10', extent=(- .5, len(pairs) - .5, - .5, -2 * size - .5))
-ax.imshow(np.arange(num_groups)[:, None], cmap='tab10',
-          extent=(-size - .5, - .5, num_groups - .5, - .5))
-ax.set_ylim(num_groups - .5, -2 * size - .5)
+ax.imshow(np.arange(NUM_GROUPS)[:, None], cmap='tab10',
+          extent=(-size - .5, - .5, NUM_GROUPS - .5, - .5))
+ax.set_ylim(NUM_GROUPS - .5, -2 * size - .5)
 ax.set_xlim(-size - .5, len(pairs) - .5)
 ax.xaxis.tick_top()
 ax.set_xlabel('Combined group index $ab$')
@@ -153,13 +146,13 @@ fig.savefig('../workspace/correlation.png')
 
 ```{code-cell} ipython3
 # Apply a permutation so "informative" groups pin down the posterior.
-index = np.arange(num_groups)
+index = np.arange(NUM_GROUPS)
 pinned = [6, 9]
 for i, j in enumerate(pinned):
     index[i] = j
     index[j] = i
 # Make sure the index is fine.
-np.testing.assert_array_equal(np.sort(index), np.arange(num_groups))
+np.testing.assert_array_equal(np.sort(index), np.arange(NUM_GROUPS))
 
 data['epsilon'] = 1e-20
 
@@ -170,7 +163,7 @@ fit = posterior.sample(
     iter_warmup=10 if SMOKE_TEST else None,
     iter_sampling=10 if SMOKE_TEST else None,
     chains=3 if SMOKE_TEST else 20,
-    seed=seed,
+    seed=SEED,
     inits=1e-2,
     show_progress=False,
 )
@@ -305,10 +298,10 @@ fig.savefig('../workspace/simulation.png')
 # Show the scatter plot.
 fig, ax = plt.subplots()
 ax.scatter(*samples.T, cmap='tab10', marker='.', alpha=.1, label='posterior samples',
-           c=np.arange(num_groups)[:, None] * np.ones(aligned.shape[0]))
-pts = ax.scatter(*reference.T, c=np.arange(num_groups), marker='X', cmap='tab10', label='reference')
+           c=np.arange(NUM_GROUPS)[:, None] * np.ones(aligned.shape[0]))
+pts = ax.scatter(*reference.T, c=np.arange(NUM_GROUPS), marker='X', cmap='tab10', label='reference')
 pts.set_edgecolor('w')
-pts = ax.scatter(*modes.T, c=np.arange(num_groups), marker='o', cmap='tab10', label='modes')
+pts = ax.scatter(*modes.T, c=np.arange(NUM_GROUPS), marker='o', cmap='tab10', label='modes')
 pts.set_edgecolor('w')
 ax.set_aspect('equal')
 ax.legend(fontsize='small')
