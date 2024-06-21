@@ -440,8 +440,9 @@ def test_neg_binom_mv_lpmf():
     )
 
 
+@pytest.mark.parametrize("scale_prior_type", ["normal", "cauchy", "jeffrey"])
 @pytest.mark.parametrize("group_data", [False, True])
-def test_group_model(group_data: bool, weighted: bool):
+def test_group_model(group_data: bool, weighted: bool, scale_prior_type: str):
     num_dims = 4
     generator = (
         alsm_model.generate_group_data if group_data else alsm_model.generate_data
@@ -450,7 +451,8 @@ def test_group_model(group_data: bool, weighted: bool):
         np.asarray([10, 20, 30, 40, 50]), num_dims, weighted, population_scale=1
     )
     data["epsilon"] = 1e-6
-    stan_file = alsm_util.write_stanfile(alsm_model.get_group_model_code())
+    model_code = alsm_model.get_group_model_code(scale_prior_type=scale_prior_type)
+    stan_file = alsm_util.write_stanfile(model_code)
     posterior = cmdstanpy.CmdStanModel(stan_file=stan_file)
     fit = posterior.sample(data=data, chains=4, iter_sampling=5, iter_warmup=17)
     assert fit.chains == 4
