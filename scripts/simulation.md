@@ -4,7 +4,7 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.14.5
+    jupytext_version: 1.14.7
 kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
@@ -167,9 +167,9 @@ data['epsilon'] = 1e-20
 posterior = cmdstanpy.CmdStanModel(stan_file=alsm.write_stanfile(alsm.get_group_model_code()))
 fit = posterior.sample(
     alsm.apply_permutation_index(data, index),
-    iter_warmup=10 if SMOKE_TEST else 1000,
-    iter_sampling=10 if SMOKE_TEST else 1000,
-    chains=3 if SMOKE_TEST else 16,
+    iter_warmup=10 if SMOKE_TEST else None,
+    iter_sampling=10 if SMOKE_TEST else None,
+    chains=3 if SMOKE_TEST else 20,
     seed=seed,
     inits=1e-2,
     show_progress=False,
@@ -271,7 +271,7 @@ lin = np.linspace(x.min(), x.max(), 100)
 ax3.plot(lin, kde(lin))
 ax3.axvline(data['propensity'], color='k', ls=':')
 ax3.set_xlabel(r'Propensity $\theta$')
-ax3.set_ylabel(r'Posterior $P(\theta)$')
+ax3.set_ylabel(r'Posterior $p(\theta\mid Y)$')
 
 # Show the scales.
 ax4 = fig.add_subplot(gs[1, 1])
