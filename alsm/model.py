@@ -428,24 +428,19 @@ def evaluate_log_aggregate_var(
 
             // Between group connections.
             if (n2 > 0) {
-                array [3] real terms = {
-                    log_y_ijij,
-                    log(n2 - 1) + log_y_ijil,
-                    log(n1 - 1) + log_y_ijkj
-                };
-                return log(n1 * n2) + log_diff_exp(
-                    log_sum_exp(terms), log(n1 + n2 - 1) + log_y_ijkl);
+                return log(n1 * n2) + log_sum_exp({
+                        log_diff_exp(log_y_ijij, log_y_ijkl),
+                        log(n2 - 1) + log_diff_exp(log_y_ijil, log_y_ijkl),
+                        log(n1 - 1) + log_diff_exp(log_y_ijkj, log_y_ijkl)
+                    });
             }
             // Within group connections.
             else {
-                array [3] real terms = {
-                    log_y_ijij,
-                    log_y_ijji,
-                    log(4 * (n1 - 2)) + log_y_ijil
-                };
-                return log(n1 * (n1 - 1)) + log_diff_exp(log_sum_exp(terms),
-                    log(2 * (2 * n1 - 3)) + log_y_ijkl
-                );
+                return log(n1 * (n1 - 1)) + log_sum_exp({
+                    log_diff_exp(log_y_ijij, log_y_ijkl),
+                    log_diff_exp(log_y_ijji, log_y_ijkl),
+                    log(4 * (n1 - 2)) + log_diff_exp(log_y_ijil, log_y_ijkl)
+                });
             }
         }
     """
