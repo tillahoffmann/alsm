@@ -518,6 +518,18 @@ def test_evaluate_beta_binomial_phi():
     assert phi > 0
 
 
+def test_evaluate_beta_binomial_log_phi():
+    _stan_python_identity(
+        alsm_model.evaluate_beta_binomial_log_phi,
+        "real",
+        [
+            ("int", "trials", 20),
+            ("real", "log_mean", 2),
+            ("real", "log_variance", 3),
+        ],
+    )
+
+
 def test_evaluate_neg_binomial_2_phi():
     phi = _stan_python_identity(
         alsm_model.evaluate_neg_binomial_2_phi,
@@ -529,6 +541,17 @@ def test_evaluate_neg_binomial_2_phi():
         ],
     )
     assert phi > 0
+
+
+def test_evaluate_neg_binomial_2_log_inv_phi():
+    _stan_python_identity(
+        alsm_model.evaluate_neg_binomial_2_log_inv_phi,
+        "real",
+        [
+            ("real", "log_mean", 3),
+            ("real", "log_variance", 3.2),
+        ],
+    )
 
 
 def test_beta_binom_mv_lpmf():
@@ -550,6 +573,26 @@ def test_beta_binom_mv_lpmf():
     )
 
 
+def test_beta_binom_lmv_lpmf():
+    trials = 100
+    dist = stats.betabinom(trials, 3, 7)
+    x = dist.rvs()
+    lpmf = _stan_python_identity(
+        alsm_model.beta_binomial_lmv_lpmf,
+        "real",
+        [
+            ("int", "x", x),
+            ("int", "trials", trials),
+            ("real", "log_mean", np.log(dist.mean())),
+            ("real", "log_variance", np.log(dist.var())),
+            ("real", "epsilon", 1e-9),
+        ],
+        [alsm_model.evaluate_beta_binomial_phi],
+        use_bar=True,
+    )
+    np.testing.assert_allclose(lpmf, dist.logpmf(x))
+
+
 def test_neg_binom_mv_lpmf():
     dist = stats.nbinom(10, 0.2)
     x = dist.rvs()
@@ -565,6 +608,24 @@ def test_neg_binom_mv_lpmf():
         [alsm_model.evaluate_neg_binomial_2_phi],
         use_bar=True,
     )
+
+
+def test_neg_binom_lmv_lpmf():
+    dist = stats.nbinom(10, 0.2)
+    x = dist.rvs()
+    lpmf = _stan_python_identity(
+        alsm_model.neg_binomial_lmv_lpmf,
+        "real",
+        [
+            ("int", "x", x),
+            ("real", "log_mean", np.log(dist.mean())),
+            ("real", "log_variance", np.log(dist.var())),
+            ("real", "epsilon", 1e-9),
+        ],
+        [alsm_model.evaluate_neg_binomial_2_phi],
+        use_bar=True,
+    )
+    np.testing.assert_allclose(lpmf, dist.logpmf(x))
 
 
 @pytest.mark.parametrize("scale_prior_type", ["normal", "cauchy", "jeffrey"])
@@ -720,3 +781,26 @@ def test_evaluate_kernel_pdf():
         PROPENSITY - 1e-9,
     )
     np.testing.assert_allclose(mean, y)
+
+
+def test_neg_binomial_lmv_rng():
+    mean = 10
+    var = 11
+
+    np.random.seed(0)
+    a = alsm_model.neg_binomial_mv_rng(mean, var)
+    np.random.seed(0)
+    b = alsm_model.neg_binomial_lmv_rng(np.log(mean), np.log(var))
+    np.testing.assert_allclose(a, b)
+
+
+def test_beta_binomial_lmv_rng():
+    trials = 100
+    mean = 10
+    var = 10
+
+    np.random.seed(0)
+    a = alsm_model.beta_binomial_mv_rng(trials, mean, var)
+    np.random.seed(0)
+    b = alsm_model.beta_binomial_lmv_rng(trials, np.log(mean), np.log(var))
+    np.testing.assert_allclose(a, b)

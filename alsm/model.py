@@ -587,6 +587,25 @@ def evaluate_neg_binomial_2_phi(
 
 
 @stan_snippet
+def evaluate_neg_binomial_2_log_inv_phi(
+    log_mean: np.ndarray, log_variance: np.ndarray
+) -> np.ndarray:
+    """
+    Evaluate the concentration parameter phi of the alternative parametrisation of the
+    negative binomial distribution.
+
+    .. code-block:: stan
+
+        real evaluate_neg_binomial_2_log_inv_phi(real log_mean, real log_variance) {
+            return log_diff_exp(log_variance, log_mean) - 2 * log_mean;
+        }
+    """
+    return -np.log(
+        evaluate_neg_binomial_2_phi(np.exp(log_mean), np.exp(log_variance), 0)
+    )
+
+
+@stan_snippet
 def neg_binomial_mv_lpmf(
     x: np.ndarray, mean: np.ndarray, variance: np.ndarray, epsilon: float = EPSILON
 ) -> np.ndarray:
@@ -620,6 +639,51 @@ def neg_binomial_mv_rng(
     """
     n, p = evaluate_neg_binomial_np(mean, variance, epsilon)
     return np.random.negative_binomial(n, p)
+
+
+@stan_snippet
+def neg_binomial_lmv_rng(
+    log_mean: np.ndarray, log_variance: np.ndarray, epsilon: float = EPSILON
+) -> np.ndarray:
+    """
+    Draw a sample from the beta binomial distribution.
+
+    TODO: Improve numerical stability instead of naive exponentiation of statistics.
+
+    .. code-block:: stan
+
+        int neg_binomial_lmv_rng(real log_mean, real log_variance, real epsilon) {
+            real mean = exp(log_mean);
+            real variance = exp(log_variance);
+            real phi = evaluate_neg_binomial_2_phi(mean, variance, epsilon);
+            return neg_binomial_2_rng(fmax(mean, epsilon), phi);
+        }
+    """
+    return neg_binomial_mv_rng(np.exp(log_mean), np.exp(log_variance), epsilon)
+
+
+@stan_snippet
+def neg_binomial_lmv_lpmf(
+    x: np.ndarray,
+    log_mean: np.ndarray,
+    log_variance: np.ndarray,
+    epsilon: float = EPSILON,
+) -> np.ndarray:
+    """
+    Evaluate the log probability mass function of the beta binomial distribution.
+
+    TODO: Improve numerical stability instead of naive exponentiation of statistics.
+
+    .. code-block:: stan
+
+        real neg_binomial_lmv_lpmf(int x, real log_mean, real log_variance,
+                                  real epsilon) {
+            real phi = evaluate_neg_binomial_2_phi(
+                exp(log_mean), exp(log_variance), epsilon);
+            return neg_binomial_2_lpmf(x | exp(log_mean), phi);
+        }
+    """
+    return neg_binomial_mv_lpmf(x, np.exp(log_mean), np.exp(log_variance), epsilon)
 
 
 @stan_snippet
@@ -658,6 +722,40 @@ def evaluate_beta_binomial_phi(
         f"trials={trials}, mean={mean}, variance={variance}",
     )
     return phi
+
+
+@stan_snippet
+def evaluate_beta_binomial_log_phi(
+    trials: np.ndarray,
+    log_mean: np.ndarray,
+    log_variance: np.ndarray,
+) -> np.ndarray:
+    """
+    Convert mean, variance, and number of trials to the concentration parameter of a
+    beta distribution.
+
+    .. code-block:: stan
+
+        real evaluate_beta_binomial_log_phi(real trials, real log_mean,
+                                            real log_variance) {
+            real log_trials = log(trials);
+            real log_mu = log_mean - log_trials;
+            real log_ratio = log_variance - log_mean - log1p(- exp(log_mu));
+            real log_phi = log_trials + log1p(- exp(log_ratio - log_trials))
+                - log_ratio - log1p(-exp(-log_ratio));
+            if (is_nan(log_phi)) {
+                reject(
+                    "beta binomial log_phi=", log_phi,
+                    " is not finite; trials=", trials, ", log_mean=", log_mean,
+                    ", log_variance=", log_variance
+                );
+            }
+            return log_phi;
+        }
+    """
+    return np.log(
+        evaluate_beta_binomial_phi(trials, np.exp(log_mean), np.exp(log_variance))
+    )
 
 
 def evaluate_beta_binomial_ab(
@@ -706,6 +804,32 @@ def beta_binomial_mv_lpmf(
 
 
 @stan_snippet
+def beta_binomial_lmv_lpmf(
+    x: np.ndarray,
+    trials: np.ndarray,
+    log_mean: np.ndarray,
+    log_variance: np.ndarray,
+    epsilon: float = 1e-9,
+) -> np.ndarray:
+    """
+    Evaluate the log probability mass function of the beta binomial distribution.
+
+    .. code-block:: stan
+
+        real beta_binomial_lmv_lpmf(int x, int trials, real log_mean, real log_variance,
+                                    real epsilon) {
+            real conc = evaluate_beta_binomial_phi(trials, exp(log_mean),
+                                                   exp(log_variance), epsilon);
+            real loc = fmax(exp(log_mean) / trials, epsilon);
+            return beta_binomial_lpmf(x | trials, conc * loc, conc * (1 - loc));
+        }
+    """
+    return beta_binomial_mv_lpmf(
+        x, trials, np.exp(log_mean), np.exp(log_variance), epsilon
+    )
+
+
+@stan_snippet
 def beta_binomial_mv_rng(
     trials: np.ndarray, mean: np.ndarray, variance: np.ndarray, epsilon: float = EPSILON
 ) -> np.ndarray:
@@ -721,6 +845,35 @@ def beta_binomial_mv_rng(
         }
     """
     a, b = evaluate_beta_binomial_ab(trials, mean, variance, epsilon)
+    return stats.betabinom(trials, a, b).rvs()
+
+
+@stan_snippet
+def beta_binomial_lmv_rng(
+    trials: np.ndarray,
+    log_mean: np.ndarray,
+    log_variance: np.ndarray,
+    epsilon: float = EPSILON,
+) -> np.ndarray:
+    """
+    Draw a sample from the beta binomial distribution.
+
+    TODO: Improve numerical stability instead of naive exponentiation of statistics.
+
+    .. code-block:: stan
+
+        int beta_binomial_lmv_rng(int trials, real log_mean, real log_variance,
+                                  real epsilon) {
+            real mean = exp(log_mean);
+            real variance = exp(log_variance);
+            real conc = evaluate_beta_binomial_phi(trials, mean, variance, epsilon);
+            real loc = fmax(mean / trials, epsilon);
+            return beta_binomial_rng(trials, conc * loc, conc * (1 - loc));
+        }
+    """
+    a, b = evaluate_beta_binomial_ab(
+        trials, np.exp(log_mean), np.exp(log_variance), epsilon
+    )
     return stats.betabinom(trials, a, b).rvs()
 
 
@@ -795,8 +948,8 @@ def get_group_model_code(
     transformed parameters {
         array [num_groups] vector[num_dims] group_locs;
         vector<lower=0>[num_groups] group_scales;
-        array [num_groups, num_groups] real mu;
-        array [num_groups, num_groups] real variance;
+        array [num_groups, num_groups] real log_mean;
+        array [num_groups, num_groups] real log_var;
 
         // Evaluate the group locations.
         group_locs[1] = center;
@@ -811,20 +964,24 @@ def get_group_model_code(
 
         for (i in 1:num_groups) {
             for (j in 1:num_groups) {
-                mu[i, j] = evaluate_mean(group_locs[i], group_locs[j], group_scales[i],
-                                         group_scales[j], propensity);
+                log_mean[i, j] = evaluate_log_mean(
+                    group_locs[i], group_locs[j], group_scales[i], group_scales[j],
+                    propensity
+                );
                 // Evaluate within-group connections.
                 if (i == j) {
-                    mu[i, j] = mu[i, j] * group_sizes[i] * (group_sizes[i] - 1);
-                    variance[i, j] = evaluate_aggregate_var(
+                    log_mean[i, j] = log_mean[i, j]
+                        + log(group_sizes[i] * (group_sizes[i] - 1));
+                    log_var[i, j] = evaluate_log_aggregate_var(
                         group_locs[i], group_locs[j], group_scales[i], group_scales[j],
                         propensity, group_sizes[i], 0, weighted
                     );
                 }
                 // Evaluate between-group connections.
                 else {
-                    mu[i, j] = mu[i, j] * group_sizes[i] * group_sizes[j];
-                    variance[i, j] = evaluate_aggregate_var(
+                    log_mean[i, j] = log_mean[i, j]
+                        + log(group_sizes[i] * group_sizes[j]);
+                    log_var[i, j] = evaluate_log_aggregate_var(
                         group_locs[i], group_locs[j], group_scales[i], group_scales[j],
                         propensity, group_sizes[i], group_sizes[j], weighted
                     );
@@ -844,11 +1001,11 @@ def get_group_model_code(
             target += evaluate_group_scale_log_jac(eta[i], num_dims);
             for (j in 1:num_groups) {
                 if (weighted) {
-                    group_adjacency[i, j] ~ neg_binomial_mv(mu[i, j], variance[i, j],
-                                                            epsilon);
+                    group_adjacency[i, j] ~ neg_binomial_lmv(
+                        log_mean[i, j], log_var[i, j], epsilon);
                 } else {
-                    group_adjacency[i, j] ~ beta_binomial_mv(num_trials[i, j], mu[i, j],
-                                                             variance[i, j], epsilon);
+                    group_adjacency[i, j] ~ beta_binomial_lmv(
+                        num_trials[i, j], log_mean[i, j], log_var[i, j], epsilon);
                 }
             }
         }
@@ -863,21 +1020,21 @@ def get_group_model_code(
 
                 // Generate posterior predictive replicates.
                 if (weighted) {
-                    ppd_group_adjacency[i, j] = neg_binomial_mv_rng(
-                        mu[i, j], variance[i, j], epsilon);
+                    ppd_group_adjacency[i, j] = neg_binomial_lmv_rng(
+                        log_mean[i, j], log_var[i, j], epsilon);
                 } else {
-                    ppd_group_adjacency[i, j] = beta_binomial_mv_rng(
-                        num_trials[i, j], mu[i, j], variance[i, j], epsilon);
+                    ppd_group_adjacency[i, j] = beta_binomial_lmv_rng(
+                        num_trials[i, j], log_mean[i, j], log_var[i, j], epsilon);
                 }
 
                 // Evaluate the log likelihood.
                 if (weighted) {
-                    log_likelihood[i, j] = neg_binomial_mv_lpmf(
-                        group_adjacency[i, j] | mu[i, j], variance[i, j], epsilon);
+                    log_likelihood[i, j] = neg_binomial_lmv_lpmf(
+                        group_adjacency[i, j] | log_mean[i, j], log_var[i, j], epsilon);
                 } else {
-                    log_likelihood[i, j] = beta_binomial_mv_lpmf(
-                        group_adjacency[i, j] | num_trials[i, j], mu[i, j],
-                        variance[i, j], epsilon);
+                    log_likelihood[i, j] = beta_binomial_lmv_lpmf(
+                        group_adjacency[i, j] | num_trials[i, j], log_mean[i, j],
+                        log_var[i, j], epsilon);
                 }
             }
         }
