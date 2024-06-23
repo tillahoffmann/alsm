@@ -204,6 +204,21 @@ def test_evaluate_mean():
     _bootstrap(KERNEL_XY, mean)
 
 
+def test_evaluate_log_mean():
+    _stan_python_identity(
+        alsm_model.evaluate_log_mean,
+        "real",
+        [
+            ("int", "k_", NUM_DIMS),
+            ("vector[k_]", "x", GROUP_LOC1),
+            ("vector[k_]", "y", GROUP_LOC2),
+            ("real<lower=0>", "xscale", GROUP_SCALE1),
+            ("real<lower=0>", "yscale", GROUP_SCALE2),
+            ("real<lower=0, upper=1>", "propensity", PROPENSITY),
+        ],
+    )
+
+
 def test_evaluate_square():
     square = _stan_python_identity(
         alsm_model.evaluate_square,
@@ -220,6 +235,21 @@ def test_evaluate_square():
     _bootstrap(KERNEL_XY**2, square)
 
 
+def test_evaluate_log_square():
+    _stan_python_identity(
+        alsm_model.evaluate_log_square,
+        "real",
+        [
+            ("int", "k_", NUM_DIMS),
+            ("vector[k_]", "x", GROUP_LOC1),
+            ("vector[k_]", "y", GROUP_LOC2),
+            ("real<lower=0>", "xscale", GROUP_SCALE1),
+            ("real<lower=0>", "yscale", GROUP_SCALE2),
+            ("real<lower=0, upper=1>", "propensity", PROPENSITY),
+        ],
+    )
+
+
 def test_evaluate_cross():
     cross = _stan_python_identity(
         alsm_model.evaluate_cross,
@@ -234,6 +264,21 @@ def test_evaluate_cross():
         ],
     )
     _bootstrap(KERNEL_XY * KERNEL_XYp, cross)
+
+
+def test_evaluate_log_cross():
+    _stan_python_identity(
+        alsm_model.evaluate_log_cross,
+        "real",
+        [
+            ("int", "k_", NUM_DIMS),
+            ("vector[k_]", "x", GROUP_LOC1),
+            ("vector[k_]", "y", GROUP_LOC2),
+            ("real<lower=0>", "xscale", GROUP_SCALE1),
+            ("real<lower=0>", "yscale", GROUP_SCALE2),
+            ("real<lower=0, upper=1>", "propensity", PROPENSITY),
+        ],
+    )
 
 
 def test_evaluate_triplet():
@@ -287,6 +332,42 @@ def test_evaluate_aggregate_mean_inter(ard_inter: np.ndarray):
     _bootstrap(ard_inter, aggregate_mean_inter)
 
 
+def test_evaluate_log_aggregate_mean_intra():
+    _stan_python_identity(
+        alsm_model.evaluate_log_aggregate_mean,
+        "real",
+        [
+            ("int", "k_", NUM_DIMS),
+            ("vector[k_]", "x", GROUP_LOC1),
+            ("vector[k_]", "y", GROUP_LOC1),
+            ("real<lower=0>", "xscale", GROUP_SCALE1),
+            ("real<lower=0>", "yscale", GROUP_SCALE1),
+            ("real<lower=0, upper=1>", "propensity", PROPENSITY),
+            ("int<lower=0>", "nx", N1),
+            ("int<lower=0>", "ny", None),
+        ],
+        [alsm_model.evaluate_log_mean],
+    )
+
+
+def test_evaluate_log_aggregate_mean_inter():
+    _stan_python_identity(
+        alsm_model.evaluate_log_aggregate_mean,
+        "real",
+        [
+            ("int", "k_", NUM_DIMS),
+            ("vector[k_]", "x", GROUP_LOC1),
+            ("vector[k_]", "y", GROUP_LOC2),
+            ("real<lower=0>", "xscale", GROUP_SCALE1),
+            ("real<lower=0>", "yscale", GROUP_SCALE2),
+            ("real<lower=0, upper=1>", "propensity", PROPENSITY),
+            ("int<lower=0>", "nx", N1),
+            ("int<lower=0>", "ny", N2),
+        ],
+        [alsm_model.evaluate_log_mean],
+    )
+
+
 def test_evaluate_aggregate_var_intra(ard_intra: np.ndarray, weighted: bool):
     aggregate_var_intra = _stan_python_identity(
         alsm_model.evaluate_aggregate_var,
@@ -333,6 +414,52 @@ def test_evaluate_aggregate_var_inter(ard_inter: np.ndarray, weighted: bool):
         ],
     )
     _bootstrap(ard_inter, aggregate_var_inter, func=np.var)
+
+
+def test_evaluate_log_aggregate_var_intra(weighted: bool):
+    _stan_python_identity(
+        alsm_model.evaluate_log_aggregate_var,
+        "real",
+        [
+            ("int", "k_", NUM_DIMS),
+            ("vector[k_]", "x", GROUP_LOC1),
+            ("vector[k_]", "y", GROUP_LOC1),
+            ("real<lower=0>", "xscale", GROUP_SCALE1),
+            ("real<lower=0>", "yscale", GROUP_SCALE1),
+            ("real<lower=0, upper=1>", "propensity", PROPENSITY),
+            ("int<lower=0>", "nx", N1),
+            ("int<lower=0>", "ny", None),
+            ("int<lower=0, upper=1>", "weighted", weighted),
+        ],
+        [
+            alsm_model.evaluate_log_mean,
+            alsm_model.evaluate_log_square,
+            alsm_model.evaluate_log_cross,
+        ],
+    )
+
+
+def test_evaluate_log_aggregate_var_inter(weighted: bool):
+    _stan_python_identity(
+        alsm_model.evaluate_log_aggregate_var,
+        "real",
+        [
+            ("int", "k_", NUM_DIMS),
+            ("vector[k_]", "x", GROUP_LOC1),
+            ("vector[k_]", "y", GROUP_LOC2),
+            ("real<lower=0>", "xscale", GROUP_SCALE1),
+            ("real<lower=0>", "yscale", GROUP_SCALE2),
+            ("real<lower=0, upper=1>", "propensity", PROPENSITY),
+            ("int<lower=0>", "nx", N1),
+            ("int<lower=0>", "ny", N2),
+            ("int<lower=0, upper=1>", "weighted", weighted),
+        ],
+        [
+            alsm_model.evaluate_log_mean,
+            alsm_model.evaluate_log_square,
+            alsm_model.evaluate_log_cross,
+        ],
+    )
 
 
 def test_evaluate_aggregate_cov_intra_inter(

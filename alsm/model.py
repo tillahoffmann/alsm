@@ -103,6 +103,31 @@ def evaluate_mean(
 
 
 @stan_snippet
+def evaluate_log_mean(
+    x: np.ndarray,
+    y: np.ndarray,
+    xscale: np.ndarray,
+    yscale: np.ndarray,
+    propensity: np.ndarray,
+) -> np.ndarray:
+    r"""
+    Evaluate the log expected connectivity kernel :math:`\lambda_{ij}: for the members
+    :math:`i` and :math:`j` of two clusters.
+
+    .. code-block:: stan
+
+        real evaluate_log_mean(vector x, vector y, real xscale, real yscale,
+                           real propensity) {
+            real d2 = squared_distance(x, y);
+            real var_ = 1 + xscale ^ 2 + yscale ^ 2;
+            int ndims = num_elements(x);
+            return log(propensity) - d2 / (2 * var_) - (ndims / 2.0) * log(var_);
+        }
+    """
+    return np.log(evaluate_mean(x, y, xscale, yscale, propensity))
+
+
+@stan_snippet
 def evaluate_square(
     x: np.ndarray,
     y: np.ndarray,
@@ -128,6 +153,31 @@ def evaluate_square(
     var = 1 + 2 * (xscale**2 + yscale**2)
     p = x.shape[-1]
     return propensity**2 * np.exp(-d2 / var) / var ** (p / 2)
+
+
+@stan_snippet
+def evaluate_log_square(
+    x: np.ndarray,
+    y: np.ndarray,
+    xscale: np.ndarray,
+    yscale: np.ndarray,
+    propensity: np.ndarray,
+) -> np.ndarray:
+    r"""
+    Evaluate the expected squared connectivity kernel :math:`\lambda_{ij}^2: for the
+    members :math:`i` and :math:`j` of two clusters.
+
+    .. code-block:: stan
+
+        real evaluate_log_square(vector x, vector y, real xscale, real yscale,
+                             real propensity) {
+            real d2 = squared_distance(x, y);
+            real var_ = 1 + 2 * (xscale ^ 2 + yscale ^ 2);
+            int ndims = num_elements(x);
+            return 2 * log(propensity) - d2 / var_ - (ndims / 2.0) * log(var_);
+        }
+    """
+    return np.log(evaluate_square(x, y, xscale, yscale, propensity))
 
 
 @stan_snippet
@@ -158,6 +208,33 @@ def evaluate_cross(
     var = 1 + 2 * xscale**2 + yscale**2
     p = x.shape[-1]
     return propensity**2 * np.exp(-d2 / var) / (var * (1 + yscale**2)) ** (p / 2)
+
+
+@stan_snippet
+def evaluate_log_cross(
+    x: np.ndarray,
+    y: np.ndarray,
+    xscale: np.ndarray,
+    yscale: np.ndarray,
+    propensity: np.ndarray,
+) -> np.ndarray:
+    r"""
+    Evaluate the log expected cross term :math:`\lambda_{ij}\lambda_{il}` fors members
+    :math:`i`, :math:`j`, and :math:`l`, where :math:`i` belongs to the first cluster
+    and :math:`j` and :math:`l` belong to the second cluster.
+
+    .. code-block:: stan
+
+        real evaluate_log_cross(vector x, vector y, real xscale, real yscale,
+                                real propensity) {
+            real d2 = squared_distance(x, y);
+            real var_ = 1 + 2 * xscale ^ 2 + yscale ^ 2;
+            int ndims = num_elements(x);
+            return 2 * log(propensity)- d2 / var_ - (ndims / 2.0)
+                * log(var_ * (1 + yscale ^ 2));
+        }
+    """
+    return np.log(evaluate_cross(x, y, xscale, yscale, propensity))
 
 
 def evaluate_triplet(
@@ -226,6 +303,35 @@ def evaluate_aggregate_mean(
 
 
 @stan_snippet
+def evaluate_log_aggregate_mean(
+    x: np.ndarray,
+    y: np.ndarray,
+    xscale: np.ndarray,
+    yscale: np.ndarray,
+    propensity: np.ndarray,
+    nx: np.ndarray,
+    ny: np.ndarray,
+) -> np.ndarray:
+    """
+    Evaluate the log expected connection volume :math:`Y_{ab}` between two clusters
+    :math:`a` and :math:`b`.
+
+    .. code-block:: stan
+
+        real evaluate_log_aggregate_mean(vector x, vector y, real xscale, real yscale,
+                                         real propensity, real n1, real n2) {
+            real log_mean = evaluate_log_mean(x, y, xscale, yscale, propensity);
+            if (n2 > 0) {
+                return log_mean + log(n1 * n2);
+            } else {
+                return log_mean + log(n1 * (n1 - 1));
+            }
+        }
+    """
+    return np.log(evaluate_aggregate_mean(x, y, xscale, yscale, propensity, nx, ny))
+
+
+@stan_snippet
 def evaluate_aggregate_var(
     x: np.ndarray,
     y: np.ndarray,
@@ -285,6 +391,67 @@ def evaluate_aggregate_var(
             * ny
             * (y_ijij + (ny - 1) * y_ijil + (nx - 1) * y_ijkj - (nx + ny - 1) * y_ijkl)
         )
+
+
+@stan_snippet
+def evaluate_log_aggregate_var(
+    x: np.ndarray,
+    y: np.ndarray,
+    xscale: np.ndarray,
+    yscale: np.ndarray,
+    propensity: np.ndarray,
+    nx: np.ndarray,
+    ny: np.ndarray,
+    weighted: bool,
+) -> np.ndarray:
+    """
+    Evaluate the log variance of the connection volume :math:`Y_{ab}` between two
+    clusters :math:`a` and :math:`b`.
+
+    .. code-block:: stan
+
+        real evaluate_log_aggregate_var(
+            vector x, vector y, real xscale, real yscale, real propensity, real n1,
+            real n2, int weighted
+        ) {
+            real log_y_ij = evaluate_log_mean(x, y, xscale, yscale, propensity);
+            real log_y_ijkl = 2 * log_y_ij;
+            real log_y_ijji = evaluate_log_square(x, y, xscale, yscale, propensity);
+            real log_y_ijij;
+            if (weighted) {
+                log_y_ijij = log_sum_exp(log_y_ij, log_y_ijji);
+            } else {
+                log_y_ijij = log_y_ij;
+            }
+            real log_y_ijil = evaluate_log_cross(x, y, xscale, yscale, propensity);
+            real log_y_ijkj = evaluate_log_cross(y, x, yscale, xscale, propensity);
+
+            // Between group connections.
+            if (n2 > 0) {
+                array [3] real terms = {
+                    log_y_ijij,
+                    log(n2 - 1) + log_y_ijil,
+                    log(n1 - 1) + log_y_ijkj
+                };
+                return log(n1 * n2) + log_diff_exp(
+                    log_sum_exp(terms), log(n1 + n2 - 1) + log_y_ijkl);
+            }
+            // Within group connections.
+            else {
+                array [3] real terms = {
+                    log_y_ijij,
+                    log_y_ijji,
+                    log(4 * (n1 - 2)) + log_y_ijil
+                };
+                return log(n1 * (n1 - 1)) + log_diff_exp(log_sum_exp(terms),
+                    log(2 * (2 * n1 - 3)) + log_y_ijkl
+                );
+            }
+        }
+    """
+    return np.log(
+        evaluate_aggregate_var(x, y, xscale, yscale, propensity, nx, ny, weighted)
+    )
 
 
 def evaluate_aggregate_cov(
@@ -692,17 +859,30 @@ def get_group_model_code(
         }
     }
 
-    // Generate posterior predictive replicates.
     generated quantities {
+        // Generate posterior predictive replicates and evaluate log likelihood.
         array [num_groups, num_groups] int ppd_group_adjacency;
+        array [num_groups, num_groups] real log_likelihood;
         for (i in 1:num_groups) {
             for (j in 1:num_groups) {
+
+                // Generate posterior predictive replicates.
                 if (weighted) {
                     ppd_group_adjacency[i, j] = neg_binomial_mv_rng(
                         mu[i, j], variance[i, j], epsilon);
                 } else {
                     ppd_group_adjacency[i, j] = beta_binomial_mv_rng(
                         num_trials[i, j], mu[i, j], variance[i, j], epsilon);
+                }
+
+                // Evaluate the log likelihood.
+                if (weighted) {
+                    log_likelihood[i, j] = neg_binomial_mv_lpmf(
+                        group_adjacency[i, j] | mu[i, j], variance[i, j], epsilon);
+                } else {
+                    log_likelihood[i, j] = beta_binomial_mv_lpmf(
+                        group_adjacency[i, j] | num_trials[i, j], mu[i, j],
+                        variance[i, j], epsilon);
                 }
             }
         }
