@@ -1,4 +1,5 @@
 -e file:
+arviz
 black
 flake8
 jupyter
