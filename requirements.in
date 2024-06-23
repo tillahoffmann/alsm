@@ -7,3 +7,4 @@ jupytext
 pytest
 pytest-cov
 tqdm
+git+https://github.com/tillahoffmann/snippets.git@d298433
