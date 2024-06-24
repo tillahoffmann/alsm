@@ -1,11 +1,12 @@
-.PHONY : analysis clean data data/addhealth lint sync tests
+.PHONY : analysis clean data data/addhealth lint sync tests workspace/prior-sensitivity
 
 build : lint tests
 
 NOTEBOOK_FLAKE8_TARGETS = $(addsuffix .flake8,$(wildcard scripts/*.ipynb))
+NB_EXECUTE = jupyter nbconvert --execute --to=html --output-dir=$(dir $@) --output=$(notdir $@) $<
 
 lint : ${NOTEBOOK_FLAKE8_TARGETS}
-	flake8 --exclude playground
+	flake8 --exclude playground,build
 	black --check .
 
 ${NOTEBOOK_FLAKE8_TARGETS} : %.flake8 : %
@@ -29,9 +30,9 @@ ipynb : ${IPYNBS}
 ${IPYNBS} : scripts/%.ipynb : scripts/%.md
 	jupytext --output $@ $<
 
-analysis : ${ANALYSIS_TARGETS}
+analysis : ${ANALYSIS_TARGETS} workspace/prior-sensitivity
 ${ANALYSIS_TARGETS} : workspace/%.html : scripts/%.ipynb
-	jupyter nbconvert --execute --to=html --output-dir=$(dir $@) --output=$(notdir $@) $<
+	${NB_EXECUTE}
 
 ADDHEALTH_FILES = comm72.dat comm72_att.dat
 ADDHEALTH_TARGETS = $(addprefix data/addhealth/,${ADDHEALTH_FILES})
@@ -43,3 +44,19 @@ ${ADDHEALTH_TARGETS} : data/addhealth/% :
 data/addhealth : ${ADDHEALTH_TARGETS}
 
 data : data/addhealth
+
+workspace/prior-sensitivity : workspace/simulation-cauchy-1.pkl \
+	workspace/simulation-cauchy-5.pkl workspace/simulation-normal-1.pkl \
+	workspace/simulation-normal-5.pkl
+
+workspace/simulation-cauchy-1.html workspace/simulation-cauchy-1.pkl : scripts/simulation.ipynb
+	SCALE_PRIOR_TYPE=cauchy SCALE_PRIOR_SCALE=1 OUTPUT=`pwd`/${@:.html=.pkl} ${NB_EXECUTE}
+
+workspace/simulation-cauchy-5.html workspace/simulation-cauchy-5.pkl : scripts/simulation.ipynb
+	SCALE_PRIOR_TYPE=cauchy SCALE_PRIOR_SCALE=5 OUTPUT=`pwd`/${@:.html=.pkl} ${NB_EXECUTE}
+
+workspace/simulation-normal-5.html workspace/simulation-normal-1.pkl : scripts/simulation.ipynb
+	SCALE_PRIOR_TYPE=normal SCALE_PRIOR_SCALE=1 OUTPUT=`pwd`/${@:.html=.pkl} ${NB_EXECUTE}
+
+workspace/simulation-normal-5.html workspace/simulation-normal-5.pkl : scripts/simulation.ipynb
+	SCALE_PRIOR_TYPE=normal SCALE_PRIOR_SCALE=5 OUTPUT=`pwd`/${@:.html=.pkl} ${NB_EXECUTE}

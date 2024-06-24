@@ -4,7 +4,7 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.14.7
+    jupytext_version: 1.16.2
 kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
@@ -21,13 +21,18 @@ import numpy as np
 from scipy.linalg import orthogonal_procrustes
 from scipy import stats
 import os
+import pickle
+import arviz
 
 
-mpl.rcParams['figure.dpi'] = 144
+mpl.rcParams["figure.dpi"] = 144
 SMOKE_TEST = "CI" in os.environ
 SEED = int(os.environ.get("SEED", "7"))
 NUM_GROUPS = int(os.environ.get("NUM_GROUPS", "10"))
 NUM_DIMS = int(os.environ.get("NUM_DIMS", "2"))
+SCALE_PRIOR_SCALE = float(os.environ.get("SCALE_PRIOR_SCALE", "5"))
+SCALE_PRIOR_TYPE = os.environ.get("SCALE_PRIOR_TYPE", "jeffrey")
+OUTPUT = os.environ.get("OUTPUT", f"simulation-{SCALE_PRIOR_TYPE}-{SCALE_PRIOR_SCALE}.pkl")
 ```
 
 ```{code-cell} ipython3
@@ -157,7 +162,11 @@ np.testing.assert_array_equal(np.sort(index), np.arange(NUM_GROUPS))
 data['epsilon'] = 1e-20
 
 # Fit the model.
-posterior = cmdstanpy.CmdStanModel(stan_file=alsm.write_stanfile(alsm.get_group_model_code()))
+model_code = alsm.get_group_model_code(
+    scale_prior_type=SCALE_PRIOR_TYPE,
+    scale_prior_scale=SCALE_PRIOR_SCALE,
+)
+posterior = cmdstanpy.CmdStanModel(stan_file=alsm.write_stanfile(model_code))
 fit = posterior.sample(
     alsm.apply_permutation_index(data, index),
     iter_warmup=10 if SMOKE_TEST else None,
@@ -176,6 +185,9 @@ fit = posterior.sample(
 median_losses = []
 median_lps = []
 inverse = alsm.invert_index(index)
+method_variables = fit.method_variables()
+divergent = method_variables["divergent__"].mean(axis=0)
+stepsize = method_variables["stepsize__"].mean(axis=0)
 for i in range(fit.chains):
     chain = alsm.apply_permutation_index(alsm.get_chain(fit, i), inverse)
     median_lp = np.median(chain['lp__'])
@@ -192,16 +204,22 @@ for i in range(fit.chains):
     # Compute the median loss.
     median_loss = np.median((aligned - reference) ** 2)
 
-    print(f'chain {i}; median lp: {median_lp:.3f}; median loss: {median_loss:.3f}')
+    print("; ".join([
+        f'chain {i}',
+        f'median lp: {median_lp:.3f}',
+        f'median loss: {median_loss:.3f}',
+        f'divergent: {divergent[i]:.3f}',
+        f'stepsize: {stepsize[i]:.3g}',
+    ]))
 
     median_losses.append(median_loss)
-    median_lps.append(median_lp)
+    # Ignore chains where more than half the samples have diverged.
+    median_lps.append(-1e9 if divergent[i] > 0.5 or stepsize[i] < 1e-9 else median_lp)
 
-# Select the best aligned chain that's within one unit of the highest lp chain (there's a lot of
-# noise in the lps and the best aligned solution may randomly have a low-ish lp).
 median_losses = np.asarray(median_losses)
 median_lps = np.asarray(median_lps)
-best_chain = np.argmin(median_losses + 1e9 * (median_lps < np.max(median_lps) - 1))
+best_chain = np.argmax(median_lps)
+print(f"best chain: {median_lps[best_chain]}")
 chain = alsm.apply_permutation_index(alsm.get_chain(fit, best_chain), inverse)
 best_chain
 ```
@@ -290,8 +308,8 @@ for ax, loc, label in labels:
             transform=ax.transAxes, ha=ha, va=va)
 
 fig.tight_layout()
-fig.savefig('../workspace/simulation.pdf')
-fig.savefig('../workspace/simulation.png')
+fig.savefig(f"../workspace/simulation-{SCALE_PRIOR_TYPE}-{SCALE_PRIOR_SCALE}.pdf")
+fig.savefig(f"../workspace/simulation-{SCALE_PRIOR_TYPE}-{SCALE_PRIOR_SCALE}.png")
 ```
 
 ```{code-cell} ipython3
@@ -325,4 +343,20 @@ ax.set_yscale('symlog')
 ax.set_xlabel('Group adjacency $Y$')
 ax.set_ylabel('Group adjacency posterior replicates')
 fig.tight_layout()
+```
+
+```{code-cell} ipython3
+if OUTPUT:
+    with open(OUTPUT, "wb") as fp:
+        pickle.dump({
+            "SMOKE_TEST": SMOKE_TEST,
+            "SEED": SEED,
+            "NUM_GROUPS": NUM_GROUPS,
+            "NUM_DIMS": NUM_DIMS,
+            "OUTPUT": OUTPUT,
+            "best_chain": best_chain,
+            "data": data,
+            "median_losses": np.asarray(median_losses),
+            "median_lps": np.asarray(median_lps),
+        }, fp)
 ```
