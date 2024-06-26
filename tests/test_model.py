@@ -628,7 +628,9 @@ def test_neg_binom_lmv_lpmf():
     np.testing.assert_allclose(lpmf, dist.logpmf(x))
 
 
-@pytest.mark.parametrize("scale_prior_type", ["normal", "cauchy", "jeffrey"])
+@pytest.mark.parametrize(
+    "scale_prior_type", ["normal", "cauchy", "jeffrey", "exponential"]
+)
 @pytest.mark.parametrize("group_data", [False, True])
 def test_group_model(group_data: bool, weighted: bool, scale_prior_type: str):
     num_dims = 4

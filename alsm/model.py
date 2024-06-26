@@ -885,7 +885,7 @@ def get_group_model_code(
 
     Args:
         scale_prior_type: Type of the prior on population and group scales (one of
-            'cauchy', 'normal', or 'jeffrey').
+            'cauchy', 'exponential', 'normal', or 'jeffrey').
         scale_prior_scale: Scale of the prior on population and group scales (ignored if
             `scale_prior_type` is 'jeffrey').
 
@@ -899,6 +899,11 @@ def get_group_model_code(
         scale_priors = f"""
         group_scales ~ {scale_prior_type}(0, {scale_prior_scale});
         population_scale ~ {scale_prior_type}(0, {scale_prior_scale});
+        """
+    elif scale_prior_type == "exponential":
+        scale_priors = f"""
+        group_scales ~ {scale_prior_type}(1 / {scale_prior_scale});
+        population_scale ~ {scale_prior_type}(1 / {scale_prior_scale});
         """
     elif scale_prior_type == "jeffrey":
         scale_priors = """
