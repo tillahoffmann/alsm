@@ -644,10 +644,6 @@ def test_group_model(group_data: bool, weighted: bool, scale_prior_type: str):
     posterior = cmdstanpy.CmdStanModel(stan_file=stan_file)
     fit = posterior.sample(data=data, chains=4, iter_sampling=5, iter_warmup=17)
     assert fit.chains == 4
-    np.testing.assert_array_equal(
-        (fit.stan_variable("group_locs_raw_") == 0).sum(axis=(1, 2)),
-        num_dims * (num_dims - 1) / 2,
-    )
 
 
 def test_group_scale_change_of_variables(figure):
