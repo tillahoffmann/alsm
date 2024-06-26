@@ -1113,6 +1113,28 @@ def get_individual_model_code(group_prior: bool) -> str:
             ]
         )
 
+    lines["generated quantities"] = [
+        """
+        matrix[num_nodes, num_nodes] log_likelihood;
+        {
+            matrix[num_nodes, num_nodes] kernel = fmax(
+                gp_exp_quad_cov(locs, sqrt(propensity), 1),
+                epsilon
+            );
+            for (i in 1:num_nodes) {
+                for (j in 1:num_nodes) {
+                    if (i == j) {
+                        log_likelihood[i, j] = 0;
+                    } else {
+                        log_likelihood[i, j] = bernoulli_lpmf(
+                            adjacency[i, j] | kernel[i, j]);
+                    }
+                }
+            }
+        }
+        """
+    ]
+
     lines = {key: "\n".join(value) for key, value in lines.items()}
     return "\n".join(f"{key} {{{value}}}" for key, value in lines.items())
 

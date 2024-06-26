@@ -760,7 +760,8 @@ def test_individual_model(group_prior: bool):
             "group_idx": data["group_idx"] + 1,
         }
     )
-    posterior.sample(data, iter_warmup=1, iter_sampling=1, chains=1)
+    fit = posterior.sample(data, iter_warmup=1, iter_sampling=1, chains=1)
+    np.testing.assert_array_less(fit.log_likelihood, 1e-9)
 
 
 def test_evaluate_kernel_pdf():
