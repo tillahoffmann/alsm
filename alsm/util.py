@@ -6,6 +6,7 @@ from matplotlib import pyplot as plt
 import numpy as np
 import pathlib
 from scipy.linalg import orthogonal_procrustes
+from scipy import special
 from typing import Optional
 
 
@@ -207,6 +208,18 @@ def evaluate_rotation_matrix(radians: float) -> np.ndarray:
             [np.sin(radians), np.cos(radians)],
         ]
     )
+
+
+def evaluate_elppd(log_likelihood, axis=-1, return_pwaic=False):
+    """
+    Evaluate the expected log posterior predictive density as discussed in BDA3.
+    """
+    lppd = special.logsumexp(log_likelihood, axis=axis).sum()
+    pwaic2 = np.var(log_likelihood, axis=axis).sum()
+    elppd = lppd - pwaic2
+    if return_pwaic:
+        return elppd, pwaic2
+    return elppd
 
 
 def estimate_mode(x: np.ndarray, scale: float = 3) -> np.ndarray:
