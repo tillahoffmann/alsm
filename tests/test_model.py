@@ -846,7 +846,8 @@ def test_householder_project() -> None:
             to_vector(u) ~ normal(0, scale);
             to_vector(v) ~ normal(0, scale);
         }
-        """ % {
+        """
+        % {
             "all_snippets": "\n".join(alsm_model.STAN_SNIPPETS.values()),
         }
     )
@@ -860,7 +861,7 @@ def test_householder_project() -> None:
         sig_figs=12,
     )
 
-    expected_cov = scale ** 2 * (np.eye(n) - 1 / n)
+    expected_cov = scale**2 * (np.eye(n) - 1 / n)
     for value in [fit.x, *np.moveaxis(fit.y, -1, 0)]:
         observed_cov = np.cov(value.T)
         assert np.corrcoef(observed_cov.ravel(), expected_cov.ravel())[0, 1] > 0.999
