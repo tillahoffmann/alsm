@@ -22,7 +22,6 @@ from scipy.linalg import orthogonal_procrustes
 from scipy import stats
 import os
 import pickle
-import arviz
 
 
 mpl.rcParams["figure.dpi"] = 144
@@ -31,7 +30,7 @@ SEED = int(os.environ.get("SEED", "7"))
 NUM_GROUPS = int(os.environ.get("NUM_GROUPS", "10"))
 NUM_DIMS = int(os.environ.get("NUM_DIMS", "2"))
 SCALE_PRIOR_SCALE = float(os.environ.get("SCALE_PRIOR_SCALE", "5"))
-SCALE_PRIOR_TYPE = os.environ.get("SCALE_PRIOR_TYPE", "jeffrey")
+SCALE_PRIOR_TYPE = os.environ.get("SCALE_PRIOR_TYPE", "cauchy")
 OUTPUT = os.environ.get("OUTPUT", f"simulation-{SCALE_PRIOR_TYPE}-{SCALE_PRIOR_SCALE}.pkl")
 ```
 
@@ -170,8 +169,8 @@ posterior = cmdstanpy.CmdStanModel(stan_file=alsm.write_stanfile(model_code))
 fit = posterior.sample(
     alsm.apply_permutation_index(data, index),
     iter_warmup=10 if SMOKE_TEST else None,
-    iter_sampling=10 if SMOKE_TEST else None,
-    chains=3 if SMOKE_TEST else 20,
+    iter_sampling=27 if SMOKE_TEST else None,
+    chains=3 if SMOKE_TEST else 24,
     seed=SEED,
     inits=1e-2,
     show_progress=False,
@@ -183,7 +182,7 @@ fit = posterior.sample(
 # original data.
 
 median_losses = []
-median_lps = []
+metrics = []
 inverse = alsm.invert_index(index)
 method_variables = fit.method_variables()
 divergent = method_variables["divergent__"].mean(axis=0)
@@ -204,22 +203,26 @@ for i in range(fit.chains):
     # Compute the median loss.
     median_loss = np.median((aligned - reference) ** 2)
 
+    # Information criterion.
+    elppd = alsm.util.evaluate_elppd(chain["log_likelihood"])
+
     print("; ".join([
         f'chain {i}',
         f'median lp: {median_lp:.3f}',
         f'median loss: {median_loss:.3f}',
         f'divergent: {divergent[i]:.3f}',
         f'stepsize: {stepsize[i]:.3g}',
+        f'elppd: {elppd:.3f}',
     ]))
 
     median_losses.append(median_loss)
     # Ignore chains where more than half the samples have diverged.
-    median_lps.append(-1e9 if divergent[i] > 0.5 or stepsize[i] < 1e-9 else median_lp)
+    metrics.append(-1e9 if divergent[i] > 0.5 or stepsize[i] < 1e-4 else elppd)
 
 median_losses = np.asarray(median_losses)
-median_lps = np.asarray(median_lps)
-best_chain = np.argmax(median_lps)
-print(f"best chain: {median_lps[best_chain]}")
+metrics = np.asarray(metrics)
+best_chain = np.argmax(metrics)
+print(f"best chain: {metrics[best_chain]}")
 chain = alsm.apply_permutation_index(alsm.get_chain(fit, best_chain), inverse)
 best_chain
 ```
@@ -263,7 +266,7 @@ ax2.scatter(*samples.T, c=c, cmap='tab10', marker='.', alpha=.05)
 
 # Show the scales.
 factor = 2
-for i, (xy, radius) in enumerate(zip(modes, chain['group_scales'].mean(axis=-1))):
+for i, (xy, radius) in enumerate(zip(modes, np.median(chain['group_scales'], axis=-1))):
     # Slightly desaturate the colour so the circle is visible against the background of samples.
     color = [c * 0.7 for c in mpl.colors.to_rgb(f'C{i}')]
     circle = mpl.patches.Circle(xy, factor * radius, edgecolor=color, facecolor='none')
@@ -354,9 +357,14 @@ if OUTPUT:
             "NUM_GROUPS": NUM_GROUPS,
             "NUM_DIMS": NUM_DIMS,
             "OUTPUT": OUTPUT,
-            "best_chain": best_chain,
+            "best_chain_idx": best_chain,
+            "best_chain": chain,
             "data": data,
             "median_losses": np.asarray(median_losses),
-            "median_lps": np.asarray(median_lps),
+            "metrics": np.asarray(metrics),
+            "samples": samples,
+            "modes": modes,
+            "reference": reference,
+            "fit": fit,
         }, fp)
 ```
