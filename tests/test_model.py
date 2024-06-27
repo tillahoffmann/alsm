@@ -281,6 +281,21 @@ def test_evaluate_log_cross():
     )
 
 
+def test_evaluate_log_cov():
+    _stan_python_identity(
+        alsm_model.evaluate_log_cov,
+        "real",
+        [
+            ("int", "k_", NUM_DIMS),
+            ("vector[k_]", "x", GROUP_LOC1),
+            ("vector[k_]", "y", GROUP_LOC2),
+            ("real<lower=0>", "xscale", GROUP_SCALE1),
+            ("real<lower=0>", "yscale", GROUP_SCALE2),
+            ("real<lower=0, upper=1>", "propensity", PROPENSITY),
+        ],
+    )
+
+
 def test_evaluate_triplet():
     triplet = alsm_model.evaluate_triplet(
         GROUP_LOC1,

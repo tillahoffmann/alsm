@@ -237,6 +237,39 @@ def evaluate_log_cross(
     return np.log(evaluate_cross(x, y, xscale, yscale, propensity))
 
 
+@stan_snippet
+def evaluate_log_cov(
+    x: np.ndarray,
+    y: np.ndarray,
+    xscale: np.ndarray,
+    yscale: np.ndarray,
+    propensity: np.ndarray,
+) -> np.ndarray:
+    r"""
+    Evaluate the log covariance :math:`\mathrm{cov}\lambda_{ij}\lambda_{il}` for members
+    :math:`i`, :math:`j`, and :math:`l`, where :math:`i` belongs to the first cluster
+    and :math:`j` and :math:`l` belong to the second cluster.
+
+    .. code-block:: stan
+
+        real evaluate_log_cov(vector x, vector y, real xscale, real yscale,
+                              real propensity) {
+            real d2 = squared_distance(x, y);
+            real var2 = 1 + 2 * xscale ^ 2 + yscale ^ 2;
+            real var1 = 1 + xscale ^ 2 + yscale ^ 2;
+            int ndims = num_elements(x);
+            return 2 * log(propensity) + log_diff_exp(
+                - d2 / var2 - (ndims / 2.0) * (log(var2) + log1p(yscale ^ 2)),
+                - d2 / var1 - ndims * log(var1)
+            );
+        }
+    """
+    return np.log(
+        evaluate_cross(x, y, xscale, yscale, propensity)
+        - evaluate_mean(x, y, xscale, yscale, propensity) ** 2
+    )
+
+
 def evaluate_triplet(
     x: np.ndarray,
     y: np.ndarray,
