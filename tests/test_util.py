@@ -153,3 +153,9 @@ def test_get_elbo():
     approx = model.variational(data={"n": 100, "y": np.random.binomial(1, 0.7, 100)})
     elbo = alsm_util.get_elbo(approx)
     assert np.isfinite(elbo)
+
+
+@pytest.mark.parametrize("return_pwaic", [False, True])
+def test_elppd(return_pwaic):
+    log_likelihood = np.random.normal(0, 1, (30, 40))
+    alsm_util.evaluate_elppd(log_likelihood, return_pwaic=return_pwaic)
