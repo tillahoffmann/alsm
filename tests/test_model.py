@@ -818,3 +818,50 @@ def test_beta_binomial_lmv_rng():
     np.random.seed(0)
     b = alsm_model.beta_binomial_lmv_rng(trials, np.log(mean), np.log(var))
     np.testing.assert_allclose(a, b)
+
+
+def test_householder_project() -> None:
+    stan_file = alsm_util.write_stanfile(
+        """
+        functions {
+            %(all_snippets)s
+        }
+
+        data {
+            int n, m;
+            real<lower=0> scale;
+        }
+
+        parameters {
+            vector [n - 1] u;
+            matrix [n - 1, m] v;
+        }
+
+        transformed parameters {
+            vector [n] x = householder_project(u);
+            matrix [n, m] y = householder_row_project(v);
+        }
+
+        model {
+            to_vector(u) ~ normal(0, scale);
+            to_vector(v) ~ normal(0, scale);
+        }
+        """ % {
+            "all_snippets": "\n".join(alsm_model.STAN_SNIPPETS.values()),
+        }
+    )
+    model = cmdstanpy.CmdStanModel(stan_file=stan_file)
+    scale = 3
+    n = 4
+    m = 5
+    fit = model.sample(
+        {"n": n, "m": m, "scale": scale},
+        iter_sampling=10_000,
+        sig_figs=12,
+    )
+
+    expected_cov = scale ** 2 * (np.eye(n) - 1 / n)
+    for value in [fit.x, *np.moveaxis(fit.y, -1, 0)]:
+        observed_cov = np.cov(value.T)
+        assert np.corrcoef(observed_cov.ravel(), expected_cov.ravel())[0, 1] > 0.999
+        np.testing.assert_array_less(np.abs(value.mean(axis=-1)), 1e-9)

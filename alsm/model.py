@@ -21,6 +21,52 @@ STAN_SNIPPETS = {
                 / num_dims * log(eta);
         }
     """,
+    # Project a noise vector to a zero-sum vector.
+    "householder_project": """
+    vector householder_project(vector z) {
+        int n = size(z) + 1;
+        real sqrt_n = sqrt(n);
+        real agg = sum(z);
+        return append_row(-agg / sqrt_n, z - agg / (sqrt_n + n));
+    }
+    """,
+    # Project a noise matrix to a matrix with each column summing to zero.
+    "householder_row_project": """
+    matrix householder_row_project(matrix z) {
+        int n = rows(z) + 1;
+        real sqrt_n = sqrt(n);
+        row_vector [cols(z)] agg = ones_row_vector(n - 1) * z;
+        return append_row(-agg / sqrt_n, z - rep_matrix(agg, n - 1) / (sqrt_n + n));
+    }
+    """,
+    "householder_col_project": """
+    matrix householder_col_project(matrix z) {
+        int n = cols(z) + 1;
+        real sqrt_n = sqrt(n);
+        vector [rows(z)] agg = z * ones_vector(n - 1);
+        return append_col(-agg / sqrt_n, z - rep_matrix(agg, n - 1) / (sqrt_n + n));
+    }
+    """,
+    "array_of_rows": """
+    array [] row_vector array_of_rows(matrix y) {
+        int n = rows(y);
+        array [n] row_vector[cols(y)] x;
+        for (i in 1:n) {
+            x[i] = y[i];
+        }
+        return x;
+    }
+    """,
+    "array_of_cols": """
+    array [] vector array_of_cols(matrix y) {
+        int n = cols(y);
+        array [n] vector[rows(y)] x;
+        for (i in 1:n) {
+            x[i] = y[:, i];
+        }
+        return x;
+    }
+    """,
 }
 
 
