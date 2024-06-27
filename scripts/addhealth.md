@@ -194,20 +194,6 @@ print(f'ppd coverage of interquartile range: {coverage:.3f}')
 ```{code-cell} ipython3
 code = alsm.get_individual_model_code(group_prior=True)
 individual_model = cmdstanpy.CmdStanModel(stan_file=alsm.write_stanfile(code))
-individual_fit = individual_model.sample(
-    iter_warmup=10 if SMOKE_TEST else None,
-    iter_sampling=10 if SMOKE_TEST else None,
-    chains=3 if SMOKE_TEST else 24,
-    inits=1e-2,
-    seed=SEED,
-    data=data,
-    show_progress=False,
-)
-```
-
-```{code-cell} ipython3
-code = alsm.get_individual_model_code(group_prior=True)
-individual_model = cmdstanpy.CmdStanModel(stan_file=alsm.write_stanfile(code))
 
 approximations = []
 # Get the centred modes.
