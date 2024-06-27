@@ -1,8 +1,11 @@
 -e file:
+arviz
 black
 flake8
 jupyter
 jupytext
 pytest
 pytest-cov
+scikit-learn
 tqdm
+git+https://github.com/tillahoffmann/snippets.git@d298433

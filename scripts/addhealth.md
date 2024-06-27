@@ -4,7 +4,7 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.14.7
+    jupytext_version: 1.16.2
 kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
@@ -132,12 +132,12 @@ index[1] = num_groups - 1
 index[num_groups - 1] = 1
 
 stan_file = alsm.write_stanfile(alsm.get_group_model_code())
-posterior = cmdstanpy.CmdStanModel(stan_file=stan_file)
-fit = posterior.sample(
+aggregate_posterior = cmdstanpy.CmdStanModel(stan_file=stan_file)
+aggregate_fit = aggregate_posterior.sample(
     iter_warmup=10 if SMOKE_TEST else None,
     iter_sampling=10 if SMOKE_TEST else None,
-    chains=3 if SMOKE_TEST else 20,
-    # inits=1e-2,
+    chains=3 if SMOKE_TEST else 24,
+    inits=1e-2,
     seed=SEED,
     data=alsm.apply_permutation_index(data, index),
     show_progress=False,
@@ -145,18 +145,18 @@ fit = posterior.sample(
 ```
 
 ```{code-cell} ipython3
-lps = alsm.get_samples(fit, 'lp__', False)
+lps = alsm.get_samples(aggregate_fit, 'lp__', False)
 plt.plot(lps, alpha=.5)
 
 # Show the number of divergent samples and median lp by chain.
 pd.DataFrame({
-    'num_divergent': fit.method_variables()['divergent__'].sum(axis=0),
+    'num_divergent': aggregate_fit.method_variables()['divergent__'].sum(axis=0),
     'median_lp': np.median(lps, axis=0),
 }).sort_values('median_lp')
 ```
 
 ```{code-cell} ipython3
-chain = alsm.get_chain(fit, 1)
+chain = alsm.get_chain(aggregate_fit, 1)
 chain = alsm.apply_permutation_index(chain, alsm.invert_index(index))
 print('median leapfrog steps in chain', np.median(chain['n_leapfrog__']))
 print('num divergent in chain', np.sum(chain['divergent__']))
@@ -171,7 +171,7 @@ modes = alsm.estimate_mode(np.rollaxis(aligned, 1))
 fig, ax = plt.subplots()
 alsm.plot_edges(modes, group_adjacency, lw=3)
 
-c = group_attributes.grade.values[:, None] * np.ones(fit.num_draws_sampling)
+c = group_attributes.grade.values[:, None] * np.ones(aggregate_fit.num_draws_sampling)
 pts = ax.scatter(*aligned.T, c=c, marker='.', alpha=.01)
 plt.draw()
 
@@ -198,7 +198,7 @@ individual_model = cmdstanpy.CmdStanModel(stan_file=alsm.write_stanfile(code))
 approximations = []
 # Get the centred modes.
 y = modes - modes.mean(axis=0)
-for seed in range(fit.chains):
+for seed in range(aggregate_fit.chains):
     approx = individual_model.variational(data, seed=seed + SEED, inits=1e-2)
     approximations.append(approx)
     # Evaluate the aligned loss.
@@ -264,9 +264,9 @@ alsm.plot_edges(xs, adjacency, alpha=.2, ax=ax1, zorder=0)
 alsm.plot_edges(y, group_adjacency, ax=ax2, zorder=1, lw=3)
 
 pts_kwargs = {
-    'cmap': mpl.cm.get_cmap('viridis', group_attributes.grade.nunique()),
-    'vmin': group_attributes.grade.min() - .5,
-    'vmax': group_attributes.grade.max() + .5,
+    'cmap': mpl.colormaps.get_cmap('viridis'),
+    'vmin': group_attributes.grade.min(),
+    'vmax': group_attributes.grade.max(),
 }
 
 # Show the individuals.
@@ -275,7 +275,7 @@ for sex, subset in attributes.groupby('sex'):
     ax1.scatter(*xs[subset.index].T, c=subset.grade, marker=marker, s=7, **pts_kwargs)
 
 # Show the markers for group location posterior samples and modes.
-ax2.scatter(*ys.T, c=group_attributes.grade.values[:, None] * np.ones(fit.num_draws_sampling),
+ax2.scatter(*ys.T, c=group_attributes.grade.values[:, None] * np.ones(aggregate_fit.num_draws_sampling),
             marker='.', alpha=.025, zorder=0, **pts_kwargs)
 for sex, subset in group_attributes.groupby('sex'):
     marker = 'so'[sex - 1]

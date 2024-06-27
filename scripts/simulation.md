@@ -4,7 +4,7 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.14.7
+    jupytext_version: 1.16.2
 kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
@@ -21,30 +21,27 @@ import numpy as np
 from scipy.linalg import orthogonal_procrustes
 from scipy import stats
 import os
+import pickle
 
 
-mpl.rcParams['figure.dpi'] = 144
+mpl.rcParams["figure.dpi"] = 144
 SMOKE_TEST = "CI" in os.environ
+SEED = int(os.environ.get("SEED", "7"))
+NUM_GROUPS = int(os.environ.get("NUM_GROUPS", "10"))
+NUM_DIMS = int(os.environ.get("NUM_DIMS", "2"))
+SCALE_PRIOR_SCALE = float(os.environ.get("SCALE_PRIOR_SCALE", "5"))
+SCALE_PRIOR_TYPE = os.environ.get("SCALE_PRIOR_TYPE", "cauchy")
+OUTPUT = os.environ.get("OUTPUT", f"simulation-{SCALE_PRIOR_TYPE}-{SCALE_PRIOR_SCALE}.pkl")
 ```
 
 ```{code-cell} ipython3
-# Generate a network.
-seed = 2  # Good but no arcs.
-seed = 14  # Reasonable example but very overlapping groups.
-seed = 20  # Good but very wiggly.
-seed = 24  # Good but no arcs.
-seed = 31  # Good example, including arcs.
-seed = 7
-num_groups = 10
-num_dims = 2
-
-np.random.seed(seed)
-group_sizes = np.random.poisson(100, num_groups)
+np.random.seed(SEED)
+group_sizes = np.random.poisson(100, NUM_GROUPS)
 data = alsm.generate_data(
     group_sizes,
-    num_dims,
+    NUM_DIMS,
     weighted=False,
-    group_scales=np.random.gamma(3, 1 / 5, num_groups),
+    group_scales=np.random.gamma(3, 1 / 5, NUM_GROUPS),
     population_scale=2.5,
     propensity=0.1,
 )
@@ -56,7 +53,7 @@ alsm.plot_edges(data['locs'], data['adjacency'], ax=ax1, alpha=.2, zorder=0)
 ax1.set_aspect('equal')
 
 # Plot the aggregate network and the radius of clusters.
-pts = ax2.scatter(*data['group_locs'].T, c=np.arange(num_groups), cmap='tab10')
+pts = ax2.scatter(*data['group_locs'].T, c=np.arange(NUM_GROUPS), cmap='tab10')
 alsm.plot_edges(data['group_locs'], data['group_adjacency'], ax=ax2, zorder=0, alpha_min=.1)
 ax2.set_aspect('equal')
 
@@ -77,10 +74,10 @@ mpl.cm.tab10
 ```
 
 ```{code-cell} ipython3
-pairs = list(it.combinations(range(num_groups), 2))
+pairs = list(it.combinations(range(NUM_GROUPS), 2))
 
 var = np.nan * np.ones(len(pairs))
-cov = np.nan * np.ones_like(var)[:, None] * np.ones(num_groups)
+cov = np.nan * np.ones_like(var)[:, None] * np.ones(NUM_GROUPS)
 corr = np.nan * np.ones_like(cov)
 group_locs = data['group_locs']
 group_scales = data['group_scales']
@@ -92,7 +89,7 @@ for i, (a, b) in enumerate(pairs):
         group_locs[a], group_locs[b], group_scales[a], group_scales[b],
         propensity, group_sizes[a], group_sizes[b], weighted
     )
-    for c in range(num_groups):
+    for c in range(NUM_GROUPS):
         var_ac = alsm.evaluate_aggregate_var(
             group_locs[a], group_locs[c], group_scales[a], group_scales[c],
             propensity, group_sizes[a], group_sizes[c], weighted
@@ -126,13 +123,13 @@ size = 2
 fig, ax = plt.subplots()
 ax.patch.set_facecolor('k')
 vmax = np.nanmax(np.abs(corr))
-cmap = mpl.cm.get_cmap('coolwarm').copy()
+cmap = mpl.colormaps.get_cmap('coolwarm').copy()
 cmap.set_bad('w')
 im = ax.imshow(corr.T, vmax=vmax, vmin=-vmax, cmap=cmap)
 ax.imshow(np.transpose(pairs), cmap='tab10', extent=(- .5, len(pairs) - .5, - .5, -2 * size - .5))
-ax.imshow(np.arange(num_groups)[:, None], cmap='tab10',
-          extent=(-size - .5, - .5, num_groups - .5, - .5))
-ax.set_ylim(num_groups - .5, -2 * size - .5)
+ax.imshow(np.arange(NUM_GROUPS)[:, None], cmap='tab10',
+          extent=(-size - .5, - .5, NUM_GROUPS - .5, - .5))
+ax.set_ylim(NUM_GROUPS - .5, -2 * size - .5)
 ax.set_xlim(-size - .5, len(pairs) - .5)
 ax.xaxis.tick_top()
 ax.set_xlabel('Combined group index $ab$')
@@ -153,24 +150,28 @@ fig.savefig('../workspace/correlation.png')
 
 ```{code-cell} ipython3
 # Apply a permutation so "informative" groups pin down the posterior.
-index = np.arange(num_groups)
+index = np.arange(NUM_GROUPS)
 pinned = [6, 9]
 for i, j in enumerate(pinned):
     index[i] = j
     index[j] = i
 # Make sure the index is fine.
-np.testing.assert_array_equal(np.sort(index), np.arange(num_groups))
+np.testing.assert_array_equal(np.sort(index), np.arange(NUM_GROUPS))
 
 data['epsilon'] = 1e-20
 
 # Fit the model.
-posterior = cmdstanpy.CmdStanModel(stan_file=alsm.write_stanfile(alsm.get_group_model_code()))
+model_code = alsm.get_group_model_code(
+    scale_prior_type=SCALE_PRIOR_TYPE,
+    scale_prior_scale=SCALE_PRIOR_SCALE,
+)
+posterior = cmdstanpy.CmdStanModel(stan_file=alsm.write_stanfile(model_code))
 fit = posterior.sample(
     alsm.apply_permutation_index(data, index),
     iter_warmup=10 if SMOKE_TEST else None,
-    iter_sampling=10 if SMOKE_TEST else None,
-    chains=3 if SMOKE_TEST else 20,
-    seed=seed,
+    iter_sampling=27 if SMOKE_TEST else None,
+    chains=3 if SMOKE_TEST else 24,
+    seed=SEED,
     inits=1e-2,
     show_progress=False,
 )
@@ -181,8 +182,11 @@ fit = posterior.sample(
 # original data.
 
 median_losses = []
-median_lps = []
+metrics = []
 inverse = alsm.invert_index(index)
+method_variables = fit.method_variables()
+divergent = method_variables["divergent__"].mean(axis=0)
+stepsize = method_variables["stepsize__"].mean(axis=0)
 for i in range(fit.chains):
     chain = alsm.apply_permutation_index(alsm.get_chain(fit, i), inverse)
     median_lp = np.median(chain['lp__'])
@@ -199,16 +203,26 @@ for i in range(fit.chains):
     # Compute the median loss.
     median_loss = np.median((aligned - reference) ** 2)
 
-    print(f'chain {i}; median lp: {median_lp:.3f}; median loss: {median_loss:.3f}')
+    # Information criterion.
+    elppd = alsm.util.evaluate_elppd(chain["log_likelihood"])
+
+    print("; ".join([
+        f'chain {i}',
+        f'median lp: {median_lp:.3f}',
+        f'median loss: {median_loss:.3f}',
+        f'divergent: {divergent[i]:.3f}',
+        f'stepsize: {stepsize[i]:.3g}',
+        f'elppd: {elppd:.3f}',
+    ]))
 
     median_losses.append(median_loss)
-    median_lps.append(median_lp)
+    # Ignore chains where more than half the samples have diverged.
+    metrics.append(-1e9 if divergent[i] > 0.5 or stepsize[i] < 1e-4 else elppd)
 
-# Select the best aligned chain that's within one unit of the highest lp chain (there's a lot of
-# noise in the lps and the best aligned solution may randomly have a low-ish lp).
 median_losses = np.asarray(median_losses)
-median_lps = np.asarray(median_lps)
-best_chain = np.argmin(median_losses + 1e9 * (median_lps < np.max(median_lps) - 1))
+metrics = np.asarray(metrics)
+best_chain = np.argmax(metrics)
+print(f"best chain: {metrics[best_chain]}")
 chain = alsm.apply_permutation_index(alsm.get_chain(fit, best_chain), inverse)
 best_chain
 ```
@@ -252,7 +266,7 @@ ax2.scatter(*samples.T, c=c, cmap='tab10', marker='.', alpha=.05)
 
 # Show the scales.
 factor = 2
-for i, (xy, radius) in enumerate(zip(modes, chain['group_scales'].mean(axis=-1))):
+for i, (xy, radius) in enumerate(zip(modes, np.median(chain['group_scales'], axis=-1))):
     # Slightly desaturate the colour so the circle is visible against the background of samples.
     color = [c * 0.7 for c in mpl.colors.to_rgb(f'C{i}')]
     circle = mpl.patches.Circle(xy, factor * radius, edgecolor=color, facecolor='none')
@@ -297,18 +311,18 @@ for ax, loc, label in labels:
             transform=ax.transAxes, ha=ha, va=va)
 
 fig.tight_layout()
-fig.savefig('../workspace/simulation.pdf')
-fig.savefig('../workspace/simulation.png')
+fig.savefig(f"../workspace/simulation-{SCALE_PRIOR_TYPE}-{SCALE_PRIOR_SCALE}.pdf")
+fig.savefig(f"../workspace/simulation-{SCALE_PRIOR_TYPE}-{SCALE_PRIOR_SCALE}.png")
 ```
 
 ```{code-cell} ipython3
 # Show the scatter plot.
 fig, ax = plt.subplots()
 ax.scatter(*samples.T, cmap='tab10', marker='.', alpha=.1, label='posterior samples',
-           c=np.arange(num_groups)[:, None] * np.ones(aligned.shape[0]))
-pts = ax.scatter(*reference.T, c=np.arange(num_groups), marker='X', cmap='tab10', label='reference')
+           c=np.arange(NUM_GROUPS)[:, None] * np.ones(aligned.shape[0]))
+pts = ax.scatter(*reference.T, c=np.arange(NUM_GROUPS), marker='X', cmap='tab10', label='reference')
 pts.set_edgecolor('w')
-pts = ax.scatter(*modes.T, c=np.arange(num_groups), marker='o', cmap='tab10', label='modes')
+pts = ax.scatter(*modes.T, c=np.arange(NUM_GROUPS), marker='o', cmap='tab10', label='modes')
 pts.set_edgecolor('w')
 ax.set_aspect('equal')
 ax.legend(fontsize='small')
@@ -332,4 +346,25 @@ ax.set_yscale('symlog')
 ax.set_xlabel('Group adjacency $Y$')
 ax.set_ylabel('Group adjacency posterior replicates')
 fig.tight_layout()
+```
+
+```{code-cell} ipython3
+if OUTPUT:
+    with open(OUTPUT, "wb") as fp:
+        pickle.dump({
+            "SMOKE_TEST": SMOKE_TEST,
+            "SEED": SEED,
+            "NUM_GROUPS": NUM_GROUPS,
+            "NUM_DIMS": NUM_DIMS,
+            "OUTPUT": OUTPUT,
+            "best_chain_idx": best_chain,
+            "best_chain": chain,
+            "data": data,
+            "median_losses": np.asarray(median_losses),
+            "metrics": np.asarray(metrics),
+            "samples": samples,
+            "modes": modes,
+            "reference": reference,
+            "fit": fit,
+        }, fp)
 ```

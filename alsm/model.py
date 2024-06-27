@@ -21,6 +21,52 @@ STAN_SNIPPETS = {
                 / num_dims * log(eta);
         }
     """,
+    # Project a noise vector to a zero-sum vector.
+    "householder_project": """
+    vector householder_project(vector z) {
+        int n = size(z) + 1;
+        real sqrt_n = sqrt(n);
+        real agg = sum(z);
+        return append_row(-agg / sqrt_n, z - agg / (sqrt_n + n));
+    }
+    """,
+    # Project a noise matrix to a matrix with each column summing to zero.
+    "householder_row_project": """
+    matrix householder_row_project(matrix z) {
+        int n = rows(z) + 1;
+        real sqrt_n = sqrt(n);
+        row_vector [cols(z)] agg = ones_row_vector(n - 1) * z;
+        return append_row(-agg / sqrt_n, z - rep_matrix(agg, n - 1) / (sqrt_n + n));
+    }
+    """,
+    "householder_col_project": """
+    matrix householder_col_project(matrix z) {
+        int n = cols(z) + 1;
+        real sqrt_n = sqrt(n);
+        vector [rows(z)] agg = z * ones_vector(n - 1);
+        return append_col(-agg / sqrt_n, z - rep_matrix(agg, n - 1) / (sqrt_n + n));
+    }
+    """,
+    "array_of_rows": """
+    array [] row_vector array_of_rows(matrix y) {
+        int n = rows(y);
+        array [n] row_vector[cols(y)] x;
+        for (i in 1:n) {
+            x[i] = y[i];
+        }
+        return x;
+    }
+    """,
+    "array_of_cols": """
+    array [] vector array_of_cols(matrix y) {
+        int n = cols(y);
+        array [n] vector[rows(y)] x;
+        for (i in 1:n) {
+            x[i] = y[:, i];
+        }
+        return x;
+    }
+    """,
 }
 
 
@@ -103,6 +149,31 @@ def evaluate_mean(
 
 
 @stan_snippet
+def evaluate_log_mean(
+    x: np.ndarray,
+    y: np.ndarray,
+    xscale: np.ndarray,
+    yscale: np.ndarray,
+    propensity: np.ndarray,
+) -> np.ndarray:
+    r"""
+    Evaluate the log expected connectivity kernel :math:`\lambda_{ij}: for the members
+    :math:`i` and :math:`j` of two clusters.
+
+    .. code-block:: stan
+
+        real evaluate_log_mean(vector x, vector y, real xscale, real yscale,
+                           real propensity) {
+            real d2 = squared_distance(x, y);
+            real var_ = 1 + xscale ^ 2 + yscale ^ 2;
+            int ndims = num_elements(x);
+            return log(propensity) - d2 / (2 * var_) - (ndims / 2.0) * log(var_);
+        }
+    """
+    return np.log(evaluate_mean(x, y, xscale, yscale, propensity))
+
+
+@stan_snippet
 def evaluate_square(
     x: np.ndarray,
     y: np.ndarray,
@@ -128,6 +199,31 @@ def evaluate_square(
     var = 1 + 2 * (xscale**2 + yscale**2)
     p = x.shape[-1]
     return propensity**2 * np.exp(-d2 / var) / var ** (p / 2)
+
+
+@stan_snippet
+def evaluate_log_square(
+    x: np.ndarray,
+    y: np.ndarray,
+    xscale: np.ndarray,
+    yscale: np.ndarray,
+    propensity: np.ndarray,
+) -> np.ndarray:
+    r"""
+    Evaluate the expected squared connectivity kernel :math:`\lambda_{ij}^2: for the
+    members :math:`i` and :math:`j` of two clusters.
+
+    .. code-block:: stan
+
+        real evaluate_log_square(vector x, vector y, real xscale, real yscale,
+                             real propensity) {
+            real d2 = squared_distance(x, y);
+            real var_ = 1 + 2 * (xscale ^ 2 + yscale ^ 2);
+            int ndims = num_elements(x);
+            return 2 * log(propensity) - d2 / var_ - (ndims / 2.0) * log(var_);
+        }
+    """
+    return np.log(evaluate_square(x, y, xscale, yscale, propensity))
 
 
 @stan_snippet
@@ -158,6 +254,66 @@ def evaluate_cross(
     var = 1 + 2 * xscale**2 + yscale**2
     p = x.shape[-1]
     return propensity**2 * np.exp(-d2 / var) / (var * (1 + yscale**2)) ** (p / 2)
+
+
+@stan_snippet
+def evaluate_log_cross(
+    x: np.ndarray,
+    y: np.ndarray,
+    xscale: np.ndarray,
+    yscale: np.ndarray,
+    propensity: np.ndarray,
+) -> np.ndarray:
+    r"""
+    Evaluate the log expected cross term :math:`\lambda_{ij}\lambda_{il}` fors members
+    :math:`i`, :math:`j`, and :math:`l`, where :math:`i` belongs to the first cluster
+    and :math:`j` and :math:`l` belong to the second cluster.
+
+    .. code-block:: stan
+
+        real evaluate_log_cross(vector x, vector y, real xscale, real yscale,
+                                real propensity) {
+            real d2 = squared_distance(x, y);
+            real var_ = 1 + 2 * xscale ^ 2 + yscale ^ 2;
+            int ndims = num_elements(x);
+            return 2 * log(propensity)- d2 / var_ - (ndims / 2.0)
+                * log(var_ * (1 + yscale ^ 2));
+        }
+    """
+    return np.log(evaluate_cross(x, y, xscale, yscale, propensity))
+
+
+@stan_snippet
+def evaluate_log_cov(
+    x: np.ndarray,
+    y: np.ndarray,
+    xscale: np.ndarray,
+    yscale: np.ndarray,
+    propensity: np.ndarray,
+) -> np.ndarray:
+    r"""
+    Evaluate the log covariance :math:`\mathrm{cov}\lambda_{ij}\lambda_{il}` for members
+    :math:`i`, :math:`j`, and :math:`l`, where :math:`i` belongs to the first cluster
+    and :math:`j` and :math:`l` belong to the second cluster.
+
+    .. code-block:: stan
+
+        real evaluate_log_cov(vector x, vector y, real xscale, real yscale,
+                              real propensity) {
+            real d2 = squared_distance(x, y);
+            real var2 = 1 + 2 * xscale ^ 2 + yscale ^ 2;
+            real var1 = 1 + xscale ^ 2 + yscale ^ 2;
+            int ndims = num_elements(x);
+            return 2 * log(propensity) + log_diff_exp(
+                - d2 / var2 - (ndims / 2.0) * (log(var2) + log1p(yscale ^ 2)),
+                - d2 / var1 - ndims * log(var1)
+            );
+        }
+    """
+    return np.log(
+        evaluate_cross(x, y, xscale, yscale, propensity)
+        - evaluate_mean(x, y, xscale, yscale, propensity) ** 2
+    )
 
 
 def evaluate_triplet(
@@ -226,6 +382,35 @@ def evaluate_aggregate_mean(
 
 
 @stan_snippet
+def evaluate_log_aggregate_mean(
+    x: np.ndarray,
+    y: np.ndarray,
+    xscale: np.ndarray,
+    yscale: np.ndarray,
+    propensity: np.ndarray,
+    nx: np.ndarray,
+    ny: np.ndarray,
+) -> np.ndarray:
+    """
+    Evaluate the log expected connection volume :math:`Y_{ab}` between two clusters
+    :math:`a` and :math:`b`.
+
+    .. code-block:: stan
+
+        real evaluate_log_aggregate_mean(vector x, vector y, real xscale, real yscale,
+                                         real propensity, real n1, real n2) {
+            real log_mean = evaluate_log_mean(x, y, xscale, yscale, propensity);
+            if (n2 > 0) {
+                return log_mean + log(n1 * n2);
+            } else {
+                return log_mean + log(n1 * (n1 - 1));
+            }
+        }
+    """
+    return np.log(evaluate_aggregate_mean(x, y, xscale, yscale, propensity, nx, ny))
+
+
+@stan_snippet
 def evaluate_aggregate_var(
     x: np.ndarray,
     y: np.ndarray,
@@ -285,6 +470,62 @@ def evaluate_aggregate_var(
             * ny
             * (y_ijij + (ny - 1) * y_ijil + (nx - 1) * y_ijkj - (nx + ny - 1) * y_ijkl)
         )
+
+
+@stan_snippet
+def evaluate_log_aggregate_var(
+    x: np.ndarray,
+    y: np.ndarray,
+    xscale: np.ndarray,
+    yscale: np.ndarray,
+    propensity: np.ndarray,
+    nx: np.ndarray,
+    ny: np.ndarray,
+    weighted: bool,
+) -> np.ndarray:
+    """
+    Evaluate the log variance of the connection volume :math:`Y_{ab}` between two
+    clusters :math:`a` and :math:`b`.
+
+    .. code-block:: stan
+
+        real evaluate_log_aggregate_var(
+            vector x, vector y, real xscale, real yscale, real propensity, real n1,
+            real n2, int weighted
+        ) {
+            real log_y_ij = evaluate_log_mean(x, y, xscale, yscale, propensity);
+            real log_y_ijkl = 2 * log_y_ij;
+            real log_y_ijji = evaluate_log_square(x, y, xscale, yscale, propensity);
+            real log_y_ijij;
+            if (weighted) {
+                log_y_ijij = log_sum_exp(log_y_ij, log_y_ijji);
+            } else {
+                log_y_ijij = log_y_ij;
+            }
+            real log_y_ijil = evaluate_log_cross(x, y, xscale, yscale, propensity);
+            real log_y_ijkj = evaluate_log_cross(y, x, yscale, xscale, propensity);
+
+            // Between group connections.
+            if (n2 > 0) {
+                return log(n1 * n2) + log_sum_exp({
+                        log_diff_exp(log_y_ijij, log_y_ijkl),
+                        log(n2 - 1) + log_diff_exp(log_y_ijil, log_y_ijkl),
+                        log(n1 - 1) + log_diff_exp(log_y_ijkj, log_y_ijkl)
+                    });
+            }
+            // Within group connections.
+            else {
+                return log(n1 * (n1 - 1)) + log_sum_exp({
+                    log_diff_exp(log_y_ijij, log_y_ijkl),
+                    log_diff_exp(log_y_ijji, log_y_ijkl),
+                    log(4 * (n1 - 2)) + log_diff_exp(log_y_ijil, log_y_ijkl)
+                });
+            }
+        }
+    """
+    return np.log(
+        evaluate_aggregate_var(x, y, xscale, yscale, propensity, nx, ny, weighted)
+    )
 
 
 def evaluate_aggregate_cov(
@@ -425,6 +666,25 @@ def evaluate_neg_binomial_2_phi(
 
 
 @stan_snippet
+def evaluate_neg_binomial_2_log_inv_phi(
+    log_mean: np.ndarray, log_variance: np.ndarray
+) -> np.ndarray:
+    """
+    Evaluate the concentration parameter phi of the alternative parametrisation of the
+    negative binomial distribution.
+
+    .. code-block:: stan
+
+        real evaluate_neg_binomial_2_log_inv_phi(real log_mean, real log_variance) {
+            return log_diff_exp(log_variance, log_mean) - 2 * log_mean;
+        }
+    """
+    return -np.log(
+        evaluate_neg_binomial_2_phi(np.exp(log_mean), np.exp(log_variance), 0)
+    )
+
+
+@stan_snippet
 def neg_binomial_mv_lpmf(
     x: np.ndarray, mean: np.ndarray, variance: np.ndarray, epsilon: float = EPSILON
 ) -> np.ndarray:
@@ -458,6 +718,51 @@ def neg_binomial_mv_rng(
     """
     n, p = evaluate_neg_binomial_np(mean, variance, epsilon)
     return np.random.negative_binomial(n, p)
+
+
+@stan_snippet
+def neg_binomial_lmv_rng(
+    log_mean: np.ndarray, log_variance: np.ndarray, epsilon: float = EPSILON
+) -> np.ndarray:
+    """
+    Draw a sample from the beta binomial distribution.
+
+    TODO: Improve numerical stability instead of naive exponentiation of statistics.
+
+    .. code-block:: stan
+
+        int neg_binomial_lmv_rng(real log_mean, real log_variance, real epsilon) {
+            real mean = exp(log_mean);
+            real variance = exp(log_variance);
+            real phi = evaluate_neg_binomial_2_phi(mean, variance, epsilon);
+            return neg_binomial_2_rng(fmax(mean, epsilon), phi);
+        }
+    """
+    return neg_binomial_mv_rng(np.exp(log_mean), np.exp(log_variance), epsilon)
+
+
+@stan_snippet
+def neg_binomial_lmv_lpmf(
+    x: np.ndarray,
+    log_mean: np.ndarray,
+    log_variance: np.ndarray,
+    epsilon: float = EPSILON,
+) -> np.ndarray:
+    """
+    Evaluate the log probability mass function of the beta binomial distribution.
+
+    TODO: Improve numerical stability instead of naive exponentiation of statistics.
+
+    .. code-block:: stan
+
+        real neg_binomial_lmv_lpmf(int x, real log_mean, real log_variance,
+                                  real epsilon) {
+            real phi = evaluate_neg_binomial_2_phi(
+                exp(log_mean), exp(log_variance), epsilon);
+            return neg_binomial_2_lpmf(x | exp(log_mean), phi);
+        }
+    """
+    return neg_binomial_mv_lpmf(x, np.exp(log_mean), np.exp(log_variance), epsilon)
 
 
 @stan_snippet
@@ -496,6 +801,40 @@ def evaluate_beta_binomial_phi(
         f"trials={trials}, mean={mean}, variance={variance}",
     )
     return phi
+
+
+@stan_snippet
+def evaluate_beta_binomial_log_phi(
+    trials: np.ndarray,
+    log_mean: np.ndarray,
+    log_variance: np.ndarray,
+) -> np.ndarray:
+    """
+    Convert mean, variance, and number of trials to the concentration parameter of a
+    beta distribution.
+
+    .. code-block:: stan
+
+        real evaluate_beta_binomial_log_phi(real trials, real log_mean,
+                                            real log_variance) {
+            real log_trials = log(trials);
+            real log_mu = log_mean - log_trials;
+            real log_ratio = log_variance - log_mean - log1p(- exp(log_mu));
+            real log_phi = log_trials + log1p(- exp(log_ratio - log_trials))
+                - log_ratio - log1p(-exp(-log_ratio));
+            if (is_nan(log_phi)) {
+                reject(
+                    "beta binomial log_phi=", log_phi,
+                    " is not finite; trials=", trials, ", log_mean=", log_mean,
+                    ", log_variance=", log_variance
+                );
+            }
+            return log_phi;
+        }
+    """
+    return np.log(
+        evaluate_beta_binomial_phi(trials, np.exp(log_mean), np.exp(log_variance))
+    )
 
 
 def evaluate_beta_binomial_ab(
@@ -544,6 +883,32 @@ def beta_binomial_mv_lpmf(
 
 
 @stan_snippet
+def beta_binomial_lmv_lpmf(
+    x: np.ndarray,
+    trials: np.ndarray,
+    log_mean: np.ndarray,
+    log_variance: np.ndarray,
+    epsilon: float = 1e-9,
+) -> np.ndarray:
+    """
+    Evaluate the log probability mass function of the beta binomial distribution.
+
+    .. code-block:: stan
+
+        real beta_binomial_lmv_lpmf(int x, int trials, real log_mean, real log_variance,
+                                    real epsilon) {
+            real conc = evaluate_beta_binomial_phi(trials, exp(log_mean),
+                                                   exp(log_variance), epsilon);
+            real loc = fmax(exp(log_mean) / trials, epsilon);
+            return beta_binomial_lpmf(x | trials, conc * loc, conc * (1 - loc));
+        }
+    """
+    return beta_binomial_mv_lpmf(
+        x, trials, np.exp(log_mean), np.exp(log_variance), epsilon
+    )
+
+
+@stan_snippet
 def beta_binomial_mv_rng(
     trials: np.ndarray, mean: np.ndarray, variance: np.ndarray, epsilon: float = EPSILON
 ) -> np.ndarray:
@@ -562,10 +927,70 @@ def beta_binomial_mv_rng(
     return stats.betabinom(trials, a, b).rvs()
 
 
-def get_group_model_code() -> str:
+@stan_snippet
+def beta_binomial_lmv_rng(
+    trials: np.ndarray,
+    log_mean: np.ndarray,
+    log_variance: np.ndarray,
+    epsilon: float = EPSILON,
+) -> np.ndarray:
+    """
+    Draw a sample from the beta binomial distribution.
+
+    TODO: Improve numerical stability instead of naive exponentiation of statistics.
+
+    .. code-block:: stan
+
+        int beta_binomial_lmv_rng(int trials, real log_mean, real log_variance,
+                                  real epsilon) {
+            real mean = exp(log_mean);
+            real variance = exp(log_variance);
+            real conc = evaluate_beta_binomial_phi(trials, mean, variance, epsilon);
+            real loc = fmax(mean / trials, epsilon);
+            return beta_binomial_rng(trials, conc * loc, conc * (1 - loc));
+        }
+    """
+    a, b = evaluate_beta_binomial_ab(
+        trials, np.exp(log_mean), np.exp(log_variance), epsilon
+    )
+    return stats.betabinom(trials, a, b).rvs()
+
+
+def get_group_model_code(
+    scale_prior_type: str = "cauchy", scale_prior_scale: float = 1.0
+) -> str:
     """
     Get the Stan code for the group-level model.
+
+    Args:
+        scale_prior_type: Type of the prior on population and group scales (one of
+            'cauchy', 'exponential', 'normal', or 'jeffrey').
+        scale_prior_scale: Scale of the prior on population and group scales (ignored if
+            `scale_prior_type` is 'jeffrey').
+
+    Returns:
+        The model code.
     """
+    # This should *probably* be handled in the Stan model rather than dynamically
+    # writing the model. But this does the trick for now.
+    if scale_prior_type in {"cauchy", "normal"}:
+        assert scale_prior_scale > 0
+        scale_priors = f"""
+        group_scales ~ {scale_prior_type}(0, {scale_prior_scale});
+        population_scale ~ {scale_prior_type}(0, {scale_prior_scale});
+        """
+    elif scale_prior_type == "exponential":
+        scale_priors = f"""
+        group_scales ~ {scale_prior_type}(1 / {scale_prior_scale});
+        population_scale ~ {scale_prior_type}(1 / {scale_prior_scale});
+        """
+    elif scale_prior_type == "jeffrey":
+        scale_priors = """
+        target += - (log(population_scale) + sum(log(group_scales)));
+        """
+    else:
+        raise ValueError(scale_prior_type)  # pragma: no cover
+
     return """
     functions {
         %(all_snippets)s
@@ -595,8 +1020,7 @@ def get_group_model_code() -> str:
     // Parameters of the model.
     parameters {
         real<lower=0> population_scale;
-        vector[num_dims] center;
-        cholesky_factor_cov[num_groups - 1, num_dims] group_locs_raw_;
+        array [num_groups] vector[num_dims] group_locs;
         real<lower=0, upper=1> propensity;
         // This is the fraction of the potential mean within-group connections we can
         // have.
@@ -605,16 +1029,9 @@ def get_group_model_code() -> str:
 
     // Estimate moments of the aggregate relational data.
     transformed parameters {
-        array [num_groups] vector[num_dims] group_locs;
         vector<lower=0>[num_groups] group_scales;
-        array [num_groups, num_groups] real mu;
-        array [num_groups, num_groups] real variance;
-
-        // Evaluate the group locations.
-        group_locs[1] = center;
-        for (i in 2:num_groups) {
-            group_locs[i] = center + group_locs_raw_[i - 1]';
-        }
+        array [num_groups, num_groups] real log_mean;
+        array [num_groups, num_groups] real log_var;
 
         // Obtain the group scales based on the "fraction of the maximum possible mean".
         for (i in 1:num_groups) {
@@ -623,20 +1040,24 @@ def get_group_model_code() -> str:
 
         for (i in 1:num_groups) {
             for (j in 1:num_groups) {
-                mu[i, j] = evaluate_mean(group_locs[i], group_locs[j], group_scales[i],
-                                         group_scales[j], propensity);
+                log_mean[i, j] = evaluate_log_mean(
+                    group_locs[i], group_locs[j], group_scales[i], group_scales[j],
+                    propensity
+                );
                 // Evaluate within-group connections.
                 if (i == j) {
-                    mu[i, j] = mu[i, j] * group_sizes[i] * (group_sizes[i] - 1);
-                    variance[i, j] = evaluate_aggregate_var(
+                    log_mean[i, j] = log_mean[i, j]
+                        + log(group_sizes[i] * (group_sizes[i] - 1));
+                    log_var[i, j] = evaluate_log_aggregate_var(
                         group_locs[i], group_locs[j], group_scales[i], group_scales[j],
                         propensity, group_sizes[i], 0, weighted
                     );
                 }
                 // Evaluate between-group connections.
                 else {
-                    mu[i, j] = mu[i, j] * group_sizes[i] * group_sizes[j];
-                    variance[i, j] = evaluate_aggregate_var(
+                    log_mean[i, j] = log_mean[i, j]
+                        + log(group_sizes[i] * group_sizes[j]);
+                    log_var[i, j] = evaluate_log_aggregate_var(
                         group_locs[i], group_locs[j], group_scales[i], group_scales[j],
                         propensity, group_sizes[i], group_sizes[j], weighted
                     );
@@ -648,8 +1069,7 @@ def get_group_model_code() -> str:
     // The actual model.
     model {
         propensity ~ beta(1, 1);
-        group_scales ~ cauchy(0, 1);
-        population_scale ~ cauchy(0, 1);
+        %(scale_priors)s
 
         for (i in 1:num_groups) {
             group_locs[i] ~ normal(0, population_scale);
@@ -657,33 +1077,47 @@ def get_group_model_code() -> str:
             target += evaluate_group_scale_log_jac(eta[i], num_dims);
             for (j in 1:num_groups) {
                 if (weighted) {
-                    group_adjacency[i, j] ~ neg_binomial_mv(mu[i, j], variance[i, j],
-                                                            epsilon);
+                    group_adjacency[i, j] ~ neg_binomial_lmv(
+                        log_mean[i, j], log_var[i, j], epsilon);
                 } else {
-                    group_adjacency[i, j] ~ beta_binomial_mv(num_trials[i, j], mu[i, j],
-                                                             variance[i, j], epsilon);
+                    group_adjacency[i, j] ~ beta_binomial_lmv(
+                        num_trials[i, j], log_mean[i, j], log_var[i, j], epsilon);
                 }
             }
         }
     }
 
-    // Generate posterior predictive replicates.
     generated quantities {
+        // Generate posterior predictive replicates and evaluate log likelihood.
         array [num_groups, num_groups] int ppd_group_adjacency;
+        array [num_groups, num_groups] real log_likelihood;
         for (i in 1:num_groups) {
             for (j in 1:num_groups) {
+
+                // Generate posterior predictive replicates.
                 if (weighted) {
-                    ppd_group_adjacency[i, j] = neg_binomial_mv_rng(
-                        mu[i, j], variance[i, j], epsilon);
+                    ppd_group_adjacency[i, j] = neg_binomial_lmv_rng(
+                        log_mean[i, j], log_var[i, j], epsilon);
                 } else {
-                    ppd_group_adjacency[i, j] = beta_binomial_mv_rng(
-                        num_trials[i, j], mu[i, j], variance[i, j], epsilon);
+                    ppd_group_adjacency[i, j] = beta_binomial_lmv_rng(
+                        num_trials[i, j], log_mean[i, j], log_var[i, j], epsilon);
+                }
+
+                // Evaluate the log likelihood.
+                if (weighted) {
+                    log_likelihood[i, j] = neg_binomial_lmv_lpmf(
+                        group_adjacency[i, j] | log_mean[i, j], log_var[i, j], epsilon);
+                } else {
+                    log_likelihood[i, j] = beta_binomial_lmv_lpmf(
+                        group_adjacency[i, j] | num_trials[i, j], log_mean[i, j],
+                        log_var[i, j], epsilon);
                 }
             }
         }
     }
 """ % {
-        "all_snippets": "\n".join(STAN_SNIPPETS.values())
+        "all_snippets": "\n".join(STAN_SNIPPETS.values()),
+        "scale_priors": scale_priors,
     }
 
 
@@ -762,6 +1196,28 @@ def get_individual_model_code(group_prior: bool) -> str:
                 "for (i in 1:num_nodes) { locs[i] ~ normal(0, population_scale); }",
             ]
         )
+
+    lines["generated quantities"] = [
+        """
+        matrix[num_nodes, num_nodes] log_likelihood;
+        {
+            matrix[num_nodes, num_nodes] kernel = fmax(
+                gp_exp_quad_cov(locs, sqrt(propensity), 1),
+                epsilon
+            );
+            for (i in 1:num_nodes) {
+                for (j in 1:num_nodes) {
+                    if (i == j) {
+                        log_likelihood[i, j] = 0;
+                    } else {
+                        log_likelihood[i, j] = bernoulli_lpmf(
+                            adjacency[i, j] | kernel[i, j]);
+                    }
+                }
+            }
+        }
+        """
+    ]
 
     lines = {key: "\n".join(value) for key, value in lines.items()}
     return "\n".join(f"{key} {{{value}}}" for key, value in lines.items())
