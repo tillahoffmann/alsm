@@ -45,18 +45,25 @@ data/addhealth : ${ADDHEALTH_TARGETS}
 
 data : data/addhealth
 
-workspace/prior-sensitivity : workspace/simulation-cauchy-1.pkl \
-	workspace/simulation-cauchy-5.pkl workspace/simulation-normal-1.pkl \
-	workspace/simulation-normal-5.pkl
+workspace/prior-sensitivity : workspace/simulation-cauchy-1.html \
+	workspace/simulation-cauchy-5.html workspace/simulation-normal-1.html \
+	workspace/simulation-normal-5.html workspace/simulation-exponential-1.html \
+	workspace/simulation-exponential-5.html
 
-workspace/simulation-cauchy-1.html workspace/simulation-cauchy-1.pkl : scripts/simulation.ipynb
+workspace/simulation-cauchy-1.html : scripts/simulation.ipynb
 	SCALE_PRIOR_TYPE=cauchy SCALE_PRIOR_SCALE=1 OUTPUT=`pwd`/${@:.html=.pkl} ${NB_EXECUTE}
 
-workspace/simulation-cauchy-5.html workspace/simulation-cauchy-5.pkl : scripts/simulation.ipynb
+workspace/simulation-cauchy-5.html : scripts/simulation.ipynb
 	SCALE_PRIOR_TYPE=cauchy SCALE_PRIOR_SCALE=5 OUTPUT=`pwd`/${@:.html=.pkl} ${NB_EXECUTE}
 
-workspace/simulation-normal-5.html workspace/simulation-normal-1.pkl : scripts/simulation.ipynb
+workspace/simulation-normal-1.html : scripts/simulation.ipynb
 	SCALE_PRIOR_TYPE=normal SCALE_PRIOR_SCALE=1 OUTPUT=`pwd`/${@:.html=.pkl} ${NB_EXECUTE}
 
-workspace/simulation-normal-5.html workspace/simulation-normal-5.pkl : scripts/simulation.ipynb
+workspace/simulation-normal-5.html : scripts/simulation.ipynb
 	SCALE_PRIOR_TYPE=normal SCALE_PRIOR_SCALE=5 OUTPUT=`pwd`/${@:.html=.pkl} ${NB_EXECUTE}
+
+workspace/simulation-exponential-1.html : scripts/simulation.ipynb
+	SCALE_PRIOR_TYPE=exponential SCALE_PRIOR_SCALE=1 OUTPUT=`pwd`/${@:.html=.pkl} ${NB_EXECUTE}
+
+workspace/simulation-exponential-5.html : scripts/simulation.ipynb
+	SCALE_PRIOR_TYPE=exponential SCALE_PRIOR_SCALE=5 OUTPUT=`pwd`/${@:.html=.pkl} ${NB_EXECUTE}
