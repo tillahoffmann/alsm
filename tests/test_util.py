@@ -39,10 +39,22 @@ def test_align_samples():
     )
     # Get modified samples.
     samples = (reference @ rotations + offsets[:, None, :]).T
+
     # Align the samples and compare with reference.
     aligned = alsm_util.align_samples(samples)
     for x in aligned:
         np.testing.assert_allclose(x, reference - reference.mean(axis=0))
+
+    # Co-align other samples after rotating them. They should match the reference after
+    # we have rotated them back again.
+    _, aligned = alsm_util.align_samples(samples, samples @ rotations[..., -1])
+    for x in aligned @ rotations[..., -1].T:
+        np.testing.assert_allclose(x, reference - reference.mean(axis=0))
+
+    # Align the samples to a different reference.
+    aligned = alsm_util.align_samples(samples, reference=samples[-1])
+    for x in aligned:
+        np.testing.assert_allclose(x, samples[-1] - samples[-1].mean(axis=0))
 
 
 @pytest.fixture
