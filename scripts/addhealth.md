@@ -149,14 +149,15 @@ lps = alsm.get_samples(aggregate_fit, 'lp__', False)
 plt.plot(lps, alpha=.5)
 
 # Show the number of divergent samples and median lp by chain.
-pd.DataFrame({
+metrics = pd.DataFrame({
     'num_divergent': aggregate_fit.method_variables()['divergent__'].sum(axis=0),
     'median_lp': np.median(lps, axis=0),
-}).sort_values('median_lp')
+})
+metrics.sort_values('median_lp')
 ```
 
 ```{code-cell} ipython3
-chain = alsm.get_chain(aggregate_fit, 1)
+chain = alsm.get_chain(aggregate_fit, metrics.median_lp.argmax())
 chain = alsm.apply_permutation_index(chain, alsm.invert_index(index))
 print('median leapfrog steps in chain', np.median(chain['n_leapfrog__']))
 print('num divergent in chain', np.sum(chain['divergent__']))
