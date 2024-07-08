@@ -1,4 +1,4 @@
-.PHONY : analysis clean data data/addhealth lint sync tests workspace/prior-sensitivity
+.PHONY : analysis clean data data/addhealth lint sync tests workspace/prior-sensitivity workspace/validation
 
 build : lint tests
 
@@ -67,3 +67,10 @@ workspace/simulation-exponential-1.html : scripts/simulation.ipynb
 
 workspace/simulation-exponential-5.html : scripts/simulation.ipynb
 	SCALE_PRIOR_TYPE=exponential SCALE_PRIOR_SCALE=5 OUTPUT=`pwd`/${@:.html=.pkl} ${NB_EXECUTE}
+
+VALIDATION_TARGETS = $(addsuffix .html,$(addprefix workspace/validation-,$(shell seq 100)))
+
+workspace/validation : ${VALIDATION_TARGETS}
+
+${VALIDATION_TARGETS} : workspace/validation-%.html : scripts/validation.ipynb
+	SEED=$* OUTPUT=`pwd`/${@:.html=.pkl} ${NB_EXECUTE}
