@@ -34,7 +34,7 @@ ${IPYNBS} : scripts/%.ipynb : scripts/%.md
 
 analysis : workspace/prior-sensitivity.html workspace/validation-statistics.html \
 	workspace/addhealth-plot.html workspace/simulation.html workspace/theory.html \
-	scripts/mode-separation-demo.html
+	workspace/mode-separation-demo.html
 
 ADDHEALTH_FILES = comm72.dat comm72_att.dat
 ADDHEALTH_TARGETS = $(addprefix data/addhealth/,${ADDHEALTH_FILES})
