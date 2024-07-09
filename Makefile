@@ -32,7 +32,7 @@ ipynb : ${IPYNBS}
 ${IPYNBS} : scripts/%.ipynb : scripts/%.md
 	jupytext --output $@ $<
 
-analysis : workspace/prior-sensitivity workspace/validation-statistics.html \
+analysis : workspace/prior-sensitivity.html workspace/validation-statistics.html \
 	workspace/addhealth-plot.html workspace/simulation.html workspace/theory.html \
 	scripts/mode-separation-demo.html
 
@@ -88,4 +88,13 @@ workspace/addhealth-fit.html : scripts/addhealth-fit.ipynb data/addhealth
 	${NB_EXECUTE}
 
 workspace/addhealth-plot.html : scripts/addhealth-plot.ipynb workspace/addhealth-fit.html
+	${NB_EXECUTE}
+
+workspace/simulation.html : scripts/simulation.ipynb
+	${NB_EXECUTE}
+
+workspace/theory.html : scripts/theory.ipynb
+	${NB_EXECUTE}
+
+workspace/mode-separation-demo.html : scripts/mode-separation-demo.ipynb
 	${NB_EXECUTE}
