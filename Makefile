@@ -22,8 +22,9 @@ sync : requirements.txt
 requirements.txt : requirements.in setup.py
 	pip-compile -v -o $@ $<
 
-NOTEBOOKS = scripts/simulation.md scripts/addhealth.md scripts/theory.md scripts/mode-separation-demo.md \
-	scripts/validation.md scripts/validation-statistics.md
+NOTEBOOKS = scripts/simulation.md scripts/theory.md scripts/mode-separation-demo.md \
+	scripts/validation.md scripts/validation-statistics.md scripts/addhealth-fit.md \
+	scripts/addhealth-plot.md
 IPYNBS = ${NOTEBOOKS:.md=.ipynb}
 ANALYSIS_TARGETS = $(addprefix workspace/,$(notdir ${NOTEBOOKS:.md=.html}))
 
@@ -31,9 +32,9 @@ ipynb : ${IPYNBS}
 ${IPYNBS} : scripts/%.ipynb : scripts/%.md
 	jupytext --output $@ $<
 
-analysis : ${ANALYSIS_TARGETS} workspace/prior-sensitivity workspace/validation-statistics.html
-${ANALYSIS_TARGETS} : workspace/%.html : scripts/%.ipynb
-	${NB_EXECUTE}
+analysis : workspace/prior-sensitivity workspace/validation-statistics.html \
+	workspace/addhealth-plot.html workspace/simulation.html workspace/theory.html \
+	scripts/mode-separation-demo.html
 
 ADDHEALTH_FILES = comm72.dat comm72_att.dat
 ADDHEALTH_TARGETS = $(addprefix data/addhealth/,${ADDHEALTH_FILES})
@@ -81,4 +82,10 @@ ${VALIDATION_TARGETS} : workspace/validation-%.html : scripts/validation.ipynb
 	SEED=$* OUTPUT=`pwd`/${@:.html=.pkl} ${NB_EXECUTE}
 
 workspace/validation-statistics.html : scripts/validation-statistics.ipynb ${VALIDATION_TARGETS}
+	${NB_EXECUTE}
+
+workspace/addhealth-fit.html : scripts/addhealth-fit.ipynb data/addhealth
+	${NB_EXECUTE}
+
+workspace/addhealth-plot.html : scripts/addhealth-plot.ipynb workspace/addhealth-fit.html
 	${NB_EXECUTE}
