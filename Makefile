@@ -22,7 +22,8 @@ sync : requirements.txt
 requirements.txt : requirements.in setup.py
 	pip-compile -v -o $@ $<
 
-NOTEBOOKS = scripts/simulation.md scripts/addhealth.md scripts/theory.md scripts/mode-separation-demo.md
+NOTEBOOKS = scripts/simulation.md scripts/addhealth.md scripts/theory.md scripts/mode-separation-demo.md \
+	scripts/validation.md scripts/validation-statistics.md
 IPYNBS = ${NOTEBOOKS:.md=.ipynb}
 ANALYSIS_TARGETS = $(addprefix workspace/,$(notdir ${NOTEBOOKS:.md=.html}))
 
