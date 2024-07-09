@@ -30,7 +30,7 @@ ipynb : ${IPYNBS}
 ${IPYNBS} : scripts/%.ipynb : scripts/%.md
 	jupytext --output $@ $<
 
-analysis : ${ANALYSIS_TARGETS} workspace/prior-sensitivity
+analysis : ${ANALYSIS_TARGETS} workspace/prior-sensitivity workspace/validation-statistics.html
 ${ANALYSIS_TARGETS} : workspace/%.html : scripts/%.ipynb
 	${NB_EXECUTE}
 
@@ -68,9 +68,16 @@ workspace/simulation-exponential-1.html : scripts/simulation.ipynb
 workspace/simulation-exponential-5.html : scripts/simulation.ipynb
 	SCALE_PRIOR_TYPE=exponential SCALE_PRIOR_SCALE=5 OUTPUT=`pwd`/${@:.html=.pkl} ${NB_EXECUTE}
 
-VALIDATION_TARGETS = $(addsuffix .html,$(addprefix workspace/validation-,$(shell seq 100)))
+ifeq ($(CI),)
+  VALIDATION_TARGETS = $(addsuffix .html,$(addprefix workspace/validation-,$(shell seq 100)))
+else
+  VALIDATION_TARGETS = $(addsuffix .html,$(addprefix workspace/validation-,$(shell seq 2)))
+endif
 
 workspace/validation : ${VALIDATION_TARGETS}
 
 ${VALIDATION_TARGETS} : workspace/validation-%.html : scripts/validation.ipynb
 	SEED=$* OUTPUT=`pwd`/${@:.html=.pkl} ${NB_EXECUTE}
+
+workspace/validation-statistics.html : scripts/validation-statistics.ipynb ${VALIDATION_TARGETS}
+	${NB_EXECUTE}
