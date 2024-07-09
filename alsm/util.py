@@ -53,30 +53,43 @@ def plot_edges(
 
 
 def align_samples(
-    samples: np.ndarray, reference: Optional[np.ndarray] = None
+    samples: np.ndarray, *extra_samples, reference: Optional[np.ndarray] = None
 ) -> np.ndarray:
     """
     Align samples of locations using rigid Procrustes transformations.
 
     Args:
         samples: Samples of locations with shape `(num_samples, num_units, num_dims)`.
+        *extra_samples: Samples of locations with shape `(num_samples, *, num_dims)` to
+            co-align with `samples`, i.e., we apply the same transform to them.
         reference: Reference to align with.
 
     Returns:
         aligned: Aligned samples.
     """
+    # Center all the samples and the reference.
+    samples = samples - samples.mean(axis=1, keepdims=True)
+    extra_samples = [x - x.mean(axis=1, keepdims=True) for x in extra_samples]
+    if reference is not None:
+        reference = reference - reference.mean(axis=-2, keepdims=True)
+
     # Actual reference which we're going to align with.
     _reference = reference
     transformed = []
-    for sample in samples:
+    extra_transformed = []
+    for i, sample in enumerate(samples):
         sample = sample - sample.mean(axis=0)
+        transform = np.eye(samples.shape[-1])
         # Automatically evaluate a reference if it wasn't given.
         if transformed and reference is None:
             _reference = np.mean(transformed, axis=0)
         if _reference is not None:
             transform, _ = orthogonal_procrustes(sample, _reference)
-            sample = sample @ transform
-        transformed.append(sample)
+        transformed.append(sample @ transform)
+        extra_transformed.append([x[i] @ transform for x in extra_samples])
+
+    if extra_samples:
+        return tuple(map(np.asarray, [transformed, *zip(*extra_transformed)]))
     return np.asarray(transformed)
 
 

@@ -44,7 +44,13 @@ prior_names = {
 for i, ((prior_type, prior_scale), result) in enumerate(results.items()):
     ax = axes.ravel()[i]
     # Get the correlation between inferred and actual scales.
-    chain = result["best_chain"]
+    fit = result["fit"]
+    metrics = [np.median(alsm.get_chain(fit, i)["lp__"]) for i in range(fit.chains)]
+    best_idx = np.argmax(metrics)
+    chain = alsm.apply_permutation_index(
+        alsm.get_chain(fit, best_idx),
+        alsm.invert_index(result["permutation_index"]),
+    )
     data = result["data"]
     median_group_scales = np.median(chain["group_scales"], axis=-1)
     scale_corrcoef = np.corrcoef(
@@ -53,8 +59,8 @@ for i, ((prior_type, prior_scale), result) in enumerate(results.items()):
     )[0, 1]
     delta = np.mean(median_group_scales - data["group_scales"])
     print(
-        prior_type, 
-        prior_scale, 
+        prior_type,
+        prior_scale,
         scale_corrcoef,
         delta,
     )
@@ -67,12 +73,12 @@ for i, ((prior_type, prior_scale), result) in enumerate(results.items()):
     ax.scatter(*samples.T, c=c, cmap='tab10', marker='.', alpha=.05)
 
     ax.text(
-        0.05, 
-        0.95, 
+        0.05,
+        0.95,
         fr"({'abcdef'[i]}) {prior_names[prior_type]}({prior_scale}); "
-        fr"$\mathrm{{corr}}\left(\sigma,\hat\sigma\right)={scale_corrcoef:.3f}$", 
-        transform=ax.transAxes, 
-        fontsize="small", 
+        fr"$\mathrm{{corr}}\left(\sigma,\hat\sigma\right)={scale_corrcoef:.3f}$",
+        transform=ax.transAxes,
+        fontsize="small",
         va="top",
     )
 

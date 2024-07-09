@@ -29,7 +29,7 @@ SMOKE_TEST = "CI" in os.environ
 SEED = int(os.environ.get("SEED", "7"))
 NUM_GROUPS = int(os.environ.get("NUM_GROUPS", "10"))
 NUM_DIMS = int(os.environ.get("NUM_DIMS", "2"))
-SCALE_PRIOR_SCALE = float(os.environ.get("SCALE_PRIOR_SCALE", "5"))
+SCALE_PRIOR_SCALE = float(os.environ.get("SCALE_PRIOR_SCALE", "1"))
 SCALE_PRIOR_TYPE = os.environ.get("SCALE_PRIOR_TYPE", "cauchy")
 OUTPUT = os.environ.get("OUTPUT", f"simulation-{SCALE_PRIOR_TYPE}-{SCALE_PRIOR_SCALE}.pkl")
 ```
@@ -178,6 +178,10 @@ fit = posterior.sample(
 ```
 
 ```{code-cell} ipython3
+print(model_code)
+```
+
+```{code-cell} ipython3
 # Go through each chain and evaluate the log probability as well as the alignment score with the
 # original data.
 
@@ -217,7 +221,7 @@ for i in range(fit.chains):
 
     median_losses.append(median_loss)
     # Ignore chains where more than half the samples have diverged.
-    metrics.append(-1e9 if divergent[i] > 0.5 or stepsize[i] < 1e-4 else elppd)
+    metrics.append(-1e9 if divergent[i] > 0.5 or stepsize[i] < 1e-4 else median_lp)
 
 median_losses = np.asarray(median_losses)
 metrics = np.asarray(metrics)
@@ -286,6 +290,7 @@ ax3.plot(lin, kde(lin))
 ax3.axvline(data['propensity'], color='k', ls=':')
 ax3.set_xlabel(r'Propensity $\theta$')
 ax3.set_ylabel(r'Posterior $p(\theta\mid Y)$')
+ax3.set_xlim(0.085, 0.13)
 
 # Show the scales.
 ax4 = fig.add_subplot(gs[1, 1])
@@ -366,5 +371,6 @@ if OUTPUT:
             "modes": modes,
             "reference": reference,
             "fit": fit,
+            "permutation_index": index,
         }, fp)
 ```

@@ -4,6 +4,7 @@ black
 flake8
 jupyter
 jupytext
+networkx
 pytest
 pytest-cov
 scikit-learn

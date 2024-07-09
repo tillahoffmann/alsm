@@ -1020,7 +1020,8 @@ def get_group_model_code(
     // Parameters of the model.
     parameters {
         real<lower=0> population_scale;
-        array [num_groups] vector[num_dims] group_locs;
+        vector[num_dims] center;
+        cholesky_factor_cov[num_groups - 1, num_dims] group_locs_raw_;
         real<lower=0, upper=1> propensity;
         // This is the fraction of the potential mean within-group connections we can
         // have.
@@ -1030,6 +1031,14 @@ def get_group_model_code(
     // Estimate moments of the aggregate relational data.
     transformed parameters {
         vector<lower=0>[num_groups] group_scales;
+
+        // Evaluate the group locations.
+        array [num_groups] vector[num_dims] group_locs;
+        group_locs[1] = center;
+        for (i in 2:num_groups) {
+            group_locs[i] = center + group_locs_raw_[i - 1]';
+        }
+
         array [num_groups, num_groups] real log_mean;
         array [num_groups, num_groups] real log_var;
 
