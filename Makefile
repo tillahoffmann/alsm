@@ -47,7 +47,7 @@ data/addhealth : ${ADDHEALTH_TARGETS}
 
 data : data/addhealth
 
-workspace/prior-sensitivity : workspace/simulation-cauchy-1.html \
+workspace/prior-sensitivity.html : workspace/simulation-cauchy-1.html \
 	workspace/simulation-cauchy-5.html workspace/simulation-normal-1.html \
 	workspace/simulation-normal-5.html workspace/simulation-exponential-1.html \
 	workspace/simulation-exponential-5.html
